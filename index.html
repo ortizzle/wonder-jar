@@ -433,6 +433,20 @@
 
   .entry-text, .pb-text { white-space: pre-line; }
 
+  /* ---------- admin view ---------- */
+  .filter-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .filter-row select.text-input, .filter-row input.text-input { flex: 1; min-width: 120px; margin-bottom: 0; }
+  .admin-list { margin-top: 14px; }
+  .admin-entry-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .admin-entry-avatar { font-size: 18px; }
+  .admin-entry-name { font-weight: 800; font-size: 13px; color: var(--lavender); }
+  .pin-row { display: flex; gap: 8px; align-items: center; }
+  .pin-row input { flex: 1; margin-bottom: 8px; }
+  .pin-row button { min-height: 44px; padding: 0 12px; border-radius: 10px; background: rgba(255,255,255,.08); color: var(--text-dim); font-weight: 800; font-size: 12px; margin-bottom: 8px; }
+  .toggle-row { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .toggle-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--glow); flex-shrink: 0; }
+  .toggle-row label { font-size: 14px; }
+
   /* ---------- PIN modal ---------- */
   .pin-input {
     font-size: 30px !important; letter-spacing: 14px; text-align: center;
@@ -485,6 +499,7 @@
   <p class="profiles-hint">Who's filling their jar tonight?</p>
   <div class="profile-actions">
     <button class="pill-btn" id="sky-btn">🌌 Our Family Sky</button>
+    <button class="pill-btn" id="admin-btn">🗂️ All Entries</button>
     <button class="pill-btn" id="settings-btn">⚙️ Grown-up stuff</button>
   </div>
 </section>
@@ -563,6 +578,25 @@
   <div class="progress-track"><div class="progress-fill" id="sky-progress"></div></div>
   <div class="progress-label" id="sky-progress-label"></div>
   <div id="rewards-list"></div>
+</section>
+
+<!-- ============ ADMIN: ALL ENTRIES ============ -->
+<section class="screen" id="screen-admin">
+  <div class="top-bar">
+    <button class="icon-btn" id="admin-back" aria-label="Back">←</button>
+    <div class="who">🗂️ All Entries</div>
+  </div>
+  <div class="filter-row">
+    <select class="text-input" id="admin-person-filter">
+      <option value="all">👨‍👩‍👧‍👦 Everyone</option>
+    </select>
+    <select class="text-input" id="admin-sort">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+    </select>
+  </div>
+  <input class="text-input" id="admin-search" type="text" placeholder="Search entries…">
+  <div class="admin-list" id="admin-list"></div>
 </section>
 
 <!-- printable keepsake book (hidden except when printing) -->
@@ -703,6 +737,7 @@ function refreshCurrentView() {
   if (active.id === 'screen-profiles') renderProfiles();
   else if (active.id === 'screen-journal' && currentKid) { renderStats(); renderJarFireflies(); }
   else if (active.id === 'screen-sky') openSky();
+  else if (active.id === 'screen-admin') renderAdminList();
 }
 
 // ---------- static data ----------
@@ -772,7 +807,10 @@ function showPinModal({ title, validate, onSuccess }) {
   setTimeout(() => input.focus(), 50);
 }
 
+function trustDevice() { return Store.get('trust_device', false); }
+
 function requirePin(person, onSuccess) {
+  if (trustDevice()) { onSuccess(); return; }
   const pin = pinFor(person.id);
   if (!pin) { onSuccess(); return; }
   showPinModal({
@@ -784,6 +822,7 @@ function requirePin(person, onSuccess) {
 }
 
 function requireParentPin(onSuccess) {
+  if (trustDevice()) { onSuccess(); return; }
   const pins = parentPins();
   if (!pins.length) { onSuccess(); return; }
   showPinModal({ title: '🔒 Grown-ups only', validate: (v) => pins.includes(v), onSuccess });
@@ -2005,6 +2044,98 @@ async function generateInsights(kind) {
   }
 }
 
+// ---------- admin: all entries ----------
+function populateAdminFilter() {
+  const sel = document.getElementById('admin-person-filter');
+  sel.textContent = '';
+  const optAll = document.createElement('option');
+  optAll.value = 'all';
+  optAll.textContent = '👨‍👩‍👧‍👦 Everyone';
+  sel.appendChild(optAll);
+  for (const p of PEOPLE) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = personAvatar(p) + ' ' + p.name;
+    sel.appendChild(o);
+  }
+}
+
+function makeAdminEntryRow(entry) {
+  const row = document.createElement('div');
+  row.className = 'entry-row';
+
+  const header = document.createElement('div');
+  header.className = 'admin-entry-header';
+  const av = document.createElement('span');
+  av.className = 'admin-entry-avatar';
+  av.textContent = personAvatar(personById(entry.kidId) || {});
+  const nm = document.createElement('span');
+  nm.className = 'admin-entry-name';
+  nm.textContent = personName(entry.kidId);
+  header.append(av, nm);
+
+  const txt = document.createElement('div');
+  txt.className = 'entry-text';
+  txt.textContent = '“' + entry.text + '”';
+
+  const meta = document.createElement('div');
+  meta.className = 'entry-meta';
+  const hearts = reactionsForEntry(entry.id);
+  meta.textContent = AZ.pretty(entry.date) + (hearts.length ? '   ❤️ ' + hearts.length : '');
+
+  const actions = document.createElement('div');
+  actions.className = 'entry-actions';
+  const del = document.createElement('button');
+  del.textContent = '🗑️ Remove';
+  del.addEventListener('click', () => {
+    showModal({
+      title: 'Remove this entry?',
+      message: 'This removes it for everyone, everywhere it syncs. It cannot be undone.',
+      confirmText: 'Remove', cancelText: 'Keep it',
+      onConfirm: () => {
+        data.records[entry.id] = { ...entry, deleted: true, updatedAt: Date.now() };
+        syncAfterChange();
+        renderAdminList();
+      }
+    });
+  });
+  actions.appendChild(del);
+
+  row.append(header, txt, meta, actions);
+  return row;
+}
+
+function renderAdminList() {
+  const list = document.getElementById('admin-list');
+  list.textContent = '';
+  const personFilter = document.getElementById('admin-person-filter').value;
+  const sortOrder = document.getElementById('admin-sort').value;
+  const q = document.getElementById('admin-search').value.trim().toLowerCase();
+
+  let entries = Object.values(data.records).filter(r => r.type === 'entry' && !r.deleted);
+  if (personFilter !== 'all') entries = entries.filter(e => e.kidId === personFilter);
+  if (q) entries = entries.filter(e => e.text.toLowerCase().includes(q));
+  entries.sort((a, b) => sortOrder === 'oldest' ? a.updatedAt - b.updatedAt : b.updatedAt - a.updatedAt);
+
+  if (!entries.length) {
+    const p = document.createElement('p');
+    p.style.color = 'var(--text-dim)';
+    p.style.marginTop = '20px';
+    p.style.textAlign = 'center';
+    p.textContent = 'No entries match yet.';
+    list.appendChild(p);
+    return;
+  }
+  for (const e of entries.slice(0, 200)) list.appendChild(makeAdminEntryRow(e));
+}
+
+function openAdminView() {
+  populateAdminFilter();
+  document.getElementById('admin-search').value = '';
+  renderAdminList();
+  show('screen-admin');
+}
+
 // ---------- family sky ----------
 function openSky() {
   const total = Object.values(data.records).filter(r => r.type === 'entry' && !r.deleted).length;
@@ -2340,11 +2471,17 @@ function openSettings() {
   const pins = makeSection(box, 'Profile codes (PINs)');
   const pinInputs = {};
   for (const p of PEOPLE) {
+    const row = document.createElement('div');
+    row.className = 'pin-row';
     const i = makeInput('text', p.name + ' — 4 digits (blank = no code)', pinFor(p.id));
     i.inputMode = 'numeric';
     i.maxLength = 4;
     pinInputs[p.id] = i;
-    pins.appendChild(i);
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = 'Clear';
+    clearBtn.addEventListener('click', () => { i.value = ''; });
+    row.append(i, clearBtn);
+    pins.appendChild(row);
   }
   const pinBtn = document.createElement('button');
   pinBtn.className = 'btn-small';
@@ -2364,7 +2501,27 @@ function openSettings() {
     toast('Codes saved 🔒');
   });
   pins.appendChild(pinBtn);
-  makeNote(pins, 'A courtesy lock for sibling privacy, not encryption. Your parent code also opens the girls\' jars and this settings screen. Codes sync to every phone.');
+  makeNote(pins, 'A courtesy lock for sibling privacy, not encryption. Your parent code also opens the girls\' jars and this settings screen. Codes sync to every phone. "Clear" empties a code here — tap Save codes to make it stick (locked-out family member can then get back in with no code).');
+
+  // this device (admin bypass)
+  const device = makeSection(box, 'This device');
+  const toggleRow = document.createElement('div');
+  toggleRow.className = 'toggle-row';
+  const toggleId = 'trust-device-toggle';
+  const check = document.createElement('input');
+  check.type = 'checkbox';
+  check.id = toggleId;
+  check.checked = trustDevice();
+  const label = document.createElement('label');
+  label.htmlFor = toggleId;
+  label.textContent = 'Skip codes on this phone';
+  check.addEventListener('change', () => {
+    Store.set('trust_device', check.checked);
+    toast(check.checked ? 'This phone now skips every code 🔓' : 'Codes back on for this phone 🔒');
+  });
+  toggleRow.append(check, label);
+  device.appendChild(toggleRow);
+  makeNote(device, 'Local to this phone only — never syncs, never affects the girls\' phones. Everyone still needs their own code on their own device.');
 
   // keepsakes & backup
   const keep = makeSection(box, 'Keepsakes & backup');
@@ -2441,6 +2598,14 @@ document.getElementById('sky-back').addEventListener('click', () => {
   renderProfiles();
   show('screen-profiles');
 });
+document.getElementById('admin-btn').addEventListener('click', () => requireParentPin(openAdminView));
+document.getElementById('admin-back').addEventListener('click', () => {
+  renderProfiles();
+  show('screen-profiles');
+});
+document.getElementById('admin-person-filter').addEventListener('change', renderAdminList);
+document.getElementById('admin-sort').addEventListener('change', renderAdminList);
+document.getElementById('admin-search').addEventListener('input', renderAdminList);
 
 // ---------- init ----------
 renderProfiles();
