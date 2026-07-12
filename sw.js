@@ -1,5 +1,5 @@
 /* Wonder Jar service worker — network-first (stale caches have burned this family before) */
-const CACHE = 'wonderjar-v1';
+const CACHE = 'wonderjar-v2';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', (e) => {

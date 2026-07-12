@@ -417,6 +417,37 @@
   #followup-card .fu-who { font-size: 13px; color: var(--lavender); font-weight: 800; }
   #followup-card .fu-q { font-family: 'Fredoka'; font-size: 18px; margin-top: 6px; }
 
+  /* ---------- glow meter ---------- */
+  #glow-meter {
+    display: flex; align-items: center; gap: 10px; justify-content: center;
+    font-size: 13px; font-weight: 800; color: var(--text-dim); min-height: 26px;
+  }
+  #glow-meter .gm-fly {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--glow);
+    box-shadow: 0 0 6px 2px rgba(255,214,107,.4); transition: all .35s ease; flex-shrink: 0;
+  }
+  #glow-meter.gm-2 .gm-fly { width: 14px; height: 14px; box-shadow: 0 0 10px 4px rgba(255,214,107,.55); }
+  #glow-meter.gm-3 .gm-fly { width: 18px; height: 18px; box-shadow: 0 0 16px 7px rgba(255,214,107,.7); }
+  #glow-meter.gm-4 .gm-fly { width: 22px; height: 22px; box-shadow: 0 0 26px 11px rgba(255,214,107,.9); }
+  #glow-meter.gm-4 #glow-label { color: var(--glow); }
+
+  .entry-text, .pb-text { white-space: pre-line; }
+
+  /* ---------- PIN modal ---------- */
+  .pin-input {
+    font-size: 30px !important; letter-spacing: 14px; text-align: center;
+    font-weight: 800; margin-top: 14px;
+  }
+
+  /* ---------- avatar editor ---------- */
+  .who .mini-avatar { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .avatar-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 12px; }
+  .avatar-choice { min-height: 48px; font-size: 25px; border-radius: 12px; background: rgba(255,255,255,.06); }
+  .avatar-choice.sel { background: rgba(184,169,245,.35); outline: 2px solid var(--lavender); }
+  .tint-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; justify-content: center; }
+  .tint-choice { width: 44px; height: 44px; border-radius: 50%; border: 3px solid transparent; }
+  .tint-choice.sel { border-color: #fff; }
+
   /* ---------- reaction discovery ---------- */
   .reaction-heart { font-size: 72px; display: block; animation: hatch .7s cubic-bezier(.34,1.56,.64,1); }
   .reaction-quote { background: #fffbe9; color: #3c2f0a; border-radius: 14px; padding: 10px 14px; font-weight: 700; font-size: 15px; margin-top: 10px; }
@@ -462,7 +493,7 @@
 <section class="screen" id="screen-journal">
   <div class="top-bar">
     <button class="icon-btn" id="back-btn" aria-label="Back">←</button>
-    <div class="who"><span class="mini-avatar" id="who-avatar"></span><span id="who-name"></span><span class="sync-dot" id="sync-dot"></span></div>
+    <div class="who"><button class="mini-avatar" id="who-avatar" aria-label="Change my look"></button><span id="who-name"></span><span class="sync-dot" id="sync-dot"></span></div>
     <div class="chips">
       <div class="chip" id="chip-streak">🔥 <span id="streak-num">0</span></div>
       <div class="chip" id="chip-sparks">⭐ <span id="sparks-num">0</span></div>
@@ -512,6 +543,7 @@
 
     <div id="transcript-zone">
       <textarea id="transcript-box" rows="3" placeholder="Your happy thought…"></textarea>
+      <div id="glow-meter"><span class="gm-fly"></span><span id="glow-label">a little spark…</span></div>
       <div class="capture-actions">
         <button class="btn-big btn-redo" id="redo-btn">🎤 Redo</button>
         <button class="btn-big btn-save" id="save-btn">Drop it in the jar! 🫙</button>
@@ -684,44 +716,125 @@ const KIDS = PEOPLE.filter(p => p.kid);
 function personById(id) { return PEOPLE.find(p => p.id === id); }
 function personName(id) { const p = personById(id); return p ? p.name : id; }
 
+// customized look + PIN live in synced records so they follow you to every phone
+function profileRec(id) {
+  const r = data.records['profile_' + id];
+  return (r && !r.deleted) ? r : null;
+}
+function personAvatar(p) { const r = profileRec(p.id); return (r && r.avatar) || p.avatar; }
+function personTint(p) { const r = profileRec(p.id); return (r && r.tint) || p.tint; }
+function pinFor(id) {
+  const r = data.records['pin_' + id];
+  return (r && !r.deleted && r.pin) ? String(r.pin) : '';
+}
+function parentPins() {
+  return PEOPLE.filter(p => !p.kid).map(p => pinFor(p.id)).filter(Boolean);
+}
+
+function showPinModal({ title, validate, onSuccess }) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h = document.createElement('h3');
+  h.textContent = title;
+  const input = document.createElement('input');
+  input.type = 'password';
+  input.inputMode = 'numeric';
+  input.maxLength = 4;
+  input.className = 'text-input pin-input';
+  input.placeholder = '• • • •';
+  input.autocomplete = 'off';
+  input.addEventListener('input', () => {
+    if (input.value.length === 4) {
+      if (validate(input.value)) {
+        overlay.remove();
+        onSuccess();
+      } else {
+        input.value = '';
+        toast('Hmm, that\'s not it! 🙈');
+      }
+    }
+  });
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const cancel = document.createElement('button');
+  cancel.className = 'btn-secondary';
+  cancel.textContent = 'Never mind';
+  cancel.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(cancel);
+
+  box.append(h, input, btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  setTimeout(() => input.focus(), 50);
+}
+
+function requirePin(person, onSuccess) {
+  const pin = pinFor(person.id);
+  if (!pin) { onSuccess(); return; }
+  showPinModal({
+    title: '🔒 ' + personName(person.id) + '\'s secret code',
+    // a parent code opens any kid's jar
+    validate: (v) => v === pin || (person.kid && parentPins().includes(v)),
+    onSuccess
+  });
+}
+
+function requireParentPin(onSuccess) {
+  const pins = parentPins();
+  if (!pins.length) { onSuccess(); return; }
+  showPinModal({ title: '🔒 Grown-ups only', validate: (v) => pins.includes(v), onSuccess });
+}
+
 const PROMPTS = [
-  'What made you laugh SO hard today?',
-  'Who was extra kind to you today?',
-  'What was the yummiest thing you ate?',
-  'What did you see outside that was cool?',
-  'What are you excited about for tomorrow?',
-  'Who did you help today? How?',
-  'What is something your body did great today?',
-  'What made you feel cozy today?',
-  'What song or sound made you happy?',
-  'What is something you love about our family?',
-  'What was tricky today, and what got you through it?',
-  'If today was an animal, what animal? Why?',
-  'What did you make or build today?',
-  'What smell made you smile today?',
-  'What is your favorite thing in your room right now?',
-  'Who made you smile today without even trying?',
-  'What did you learn today that surprised you?',
-  'What was the bravest thing you did today?',
-  'Who gave you the best hug today?',
-  'What game or toy made today more fun?',
-  'What color was your day? Why?',
-  'What sound do you love falling asleep to?',
-  'What did someone teach you today?',
-  'What made your body feel strong today?',
-  'What place made you happy today?',
-  'What would you thank the sun for today?',
-  'Who do you want to be extra kind to tomorrow?',
-  'What tiny thing would you miss if it disappeared?',
-  'What food are you most thankful for this week?',
-  'What story or book are you glad exists?',
-  'What did you share today?',
-  'When did you feel proud of yourself today?',
-  'What made your family laugh together recently?',
-  'What is something outside your window to be thankful for?',
-  'If your pet or a bug could talk, what would you thank it for?',
-  'What is the coziest spot in our house? Why?',
-  'What superpower did your heart use today?'
+  'What made you laugh hardest today? Tell the whole story — who was there, and what happened right before?',
+  'Who was kind to you today? What exactly did they do, and how did it change how you felt?',
+  'What was the best thing you tasted today? Describe it like a food critic who absolutely loved it.',
+  'What did you notice today that most people would walk right past? Why did it catch your eye?',
+  'What are you looking forward to tomorrow? What will make it great — and which part depends on you?',
+  'Who did you help today? What did you do, and how do you think it made them feel?',
+  'What did your body do well today — running, drawing, singing? When did you first learn how?',
+  'What made you feel safe or cozy today? Who or what makes that feeling happen?',
+  'What song, sound, or voice made today better? Where were you when you heard it?',
+  'What do you love about our family that other people might not know about us?',
+  'What was hard today, and what got you through it? What would you tell a friend facing the same thing?',
+  'If today was a movie, which moment was the highlight? Set the scene like a director.',
+  'What did you create or figure out today? What was the trickiest part?',
+  'What smell brought back a memory today? What was the memory?',
+  'Which of your things would you rescue first? What is the story behind it?',
+  'Who made you smile today without even trying? What is it about them that does that?',
+  'What did you learn today that you did not know when you woke up? Who or what taught you?',
+  'What was the bravest thing you did today, even a small one? What were you nervous about?',
+  'What game, book, or show made today better? What happened in it that stuck with you?',
+  'What did someone in our family do this week that you are grateful for? Have you told them yet?',
+  'When did you feel proud of yourself today? What did it take to get there?',
+  'What place made you happy today? Describe it so well someone could paint it.',
+  'What tiny everyday thing would you miss if it vanished tomorrow — and why that one?',
+  'What did you share or give today? What made you decide to do it?',
+  'Who deserves more thanks than they usually get? What do they quietly do for people?',
+  'What made your heart feel full today? Where were you, and who was with you?'
+];
+
+const AVATAR_CHOICES = [
+  '🦋','🦊','🐺','🐯','🦁','🐼',
+  '🐨','🐸','🦄','🐉','🦅','🦉',
+  '🐬','🐢','🐍','🦎','🐙','🦈',
+  '🐴','🐰','🌸','🌵','🌙','⭐',
+  '🔥','🌈','🎨','⚽','🎸','👑',
+  '💎','🌊','🍩','🧁','🛹','🎧'
+];
+const TINT_CHOICES = [
+  { tint: 'rgba(245,169,208,.25)', solid: '#f5a9d0' },
+  { tint: 'rgba(123,224,214,.22)', solid: '#7be0d6' },
+  { tint: 'rgba(184,169,245,.25)', solid: '#b8a9f5' },
+  { tint: 'rgba(255,214,107,.22)', solid: '#ffd66b' },
+  { tint: 'rgba(123,224,160,.22)', solid: '#7be0a0' },
+  { tint: 'rgba(122,171,245,.25)', solid: '#7aabf5' },
+  { tint: 'rgba(255,157,60,.25)',  solid: '#ff9d3c' },
+  { tint: 'rgba(245,111,111,.25)', solid: '#f56f6f' }
 ];
 
 const GLIMMERS = [
@@ -747,8 +860,15 @@ const GLIMMERS = [
 const RARITY_LABEL = { common: '★ GLIMMER', rare: '★★ RARE GLIMMER', legendary: '★★★ LEGENDARY!' };
 
 const SPARKS_PER_ENTRY = 10;
-const DISCOVERY_CHANCE = 0.45;
-const WISH_EVERY = 7; // earn a Wonder Wish every 7 entries
+const WISH_EVERY = 7; // earn a Wonder Wish every 7 days of entries
+
+// brighter (longer) thoughts attract more Glimmers
+function discoveryChance(text) {
+  const len = (text || '').length;
+  if (len >= 150) return 0.6;
+  if (len >= 60) return 0.4;
+  return 0.2;
+}
 
 const BADGES = [
   { id: 'first_entry', name: 'First Steps', emoji: '🌱', desc: 'Drop your first thought in the jar', check: (s) => s.totalEntries >= 1 },
@@ -904,8 +1024,8 @@ function makePersonCard(person) {
 
   const av = document.createElement('div');
   av.className = 'kid-avatar';
-  av.style.background = person.tint;
-  av.textContent = person.avatar;
+  av.style.background = personTint(person);
+  av.textContent = personAvatar(person);
 
   const nm = document.createElement('div');
   nm.className = 'kid-name';
@@ -918,7 +1038,7 @@ function makePersonCard(person) {
     : `${stats.totalEntries} glow${stats.totalEntries === 1 ? '' : 's'} · 🔥 ${stats.currentStreak}`;
 
   card.append(av, nm, st);
-  card.addEventListener('click', () => enterJournal(person));
+  card.addEventListener('click', () => requirePin(person, () => enterJournal(person)));
   return card;
 }
 
@@ -935,7 +1055,7 @@ function renderProfiles() {
 // ---------- journal ----------
 function enterJournal(kid) {
   currentKid = kid;
-  document.getElementById('who-avatar').textContent = kid.avatar;
+  document.getElementById('who-avatar').textContent = personAvatar(kid);
   document.getElementById('who-name').textContent = kid.name;
   pickPrompt(false);
   resetCapture();
@@ -1031,6 +1151,20 @@ const micBtn = document.getElementById('mic-btn');
 const micHint = document.getElementById('mic-hint');
 const transcriptZone = document.getElementById('transcript-zone');
 const transcriptBox = document.getElementById('transcript-box');
+const glowMeter = document.getElementById('glow-meter');
+const glowLabel = document.getElementById('glow-label');
+
+function updateGlowMeter() {
+  const len = transcriptBox.value.trim().length;
+  let lvl, label;
+  if (len < 30) { lvl = 1; label = 'a little spark…'; }
+  else if (len < 60) { lvl = 2; label = 'warm glow ✨'; }
+  else if (len < 150) { lvl = 3; label = 'bright! keep going…'; }
+  else { lvl = 4; label = 'RADIANT! 🌟'; }
+  glowMeter.className = 'gm-' + lvl;
+  glowLabel.textContent = label;
+}
+transcriptBox.addEventListener('input', updateGlowMeter);
 
 function showTranscript() {
   transcriptZone.classList.add('show');
@@ -1063,6 +1197,7 @@ function startListening() {
       for (const res of e.results) text += res[0].transcript;
       transcriptBox.value = text;
       transcriptZone.classList.add('show');
+      updateGlowMeter();
     });
     recognition.addEventListener('end', () => {
       recognizing = false;
@@ -1108,6 +1243,7 @@ function stopListening() {
 function showTyping() {
   stopListening();
   showTranscript();
+  updateGlowMeter();
   transcriptBox.focus();
 }
 
@@ -1152,12 +1288,19 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
   let entryId;
   let isNew = false;
+  const todays = entriesFor(currentKid.id).find(e => e.date === AZ.today());
   if (pendingAppend && data.records[pendingAppend]) {
     entryId = pendingAppend;
     const rec = data.records[entryId];
     rec.text = rec.text + ' ' + text;
     rec.updatedAt = Date.now();
     pendingAppend = null;
+  } else if (todays) {
+    // one glowing thought per night — new captures join it
+    entryId = todays.id;
+    todays.text = todays.text + '\n' + text;
+    todays.updatedAt = Date.now();
+    toast('Added to tonight\'s glow! ✨');
   } else {
     isNew = true;
     entryId = 'entry_' + uid();
@@ -1173,7 +1316,7 @@ document.getElementById('save-btn').addEventListener('click', () => {
     renderJarFireflies();
     renderStats('sparks');
     if (isNew) {
-      const found = maybeDiscover();
+      const found = maybeDiscover(text);
       if (found) queueCeleb(() => revealGlimmer(found));
       for (const b of evaluateBadges(currentKid.id)) queueCeleb(() => revealBadge(b));
       syncAfterChange();
@@ -1207,10 +1350,10 @@ function flyFireflyToJar(done) {
 }
 
 // ---------- discovery ----------
-function maybeDiscover() {
+function maybeDiscover(text) {
   const owned = glimmersFor(currentKid.id);
   const firstEver = entriesFor(currentKid.id).length === 1;
-  if (!firstEver && Math.random() > DISCOVERY_CHANCE) return null;
+  if (!firstEver && Math.random() > discoveryChance(text)) return null;
 
   const pool = GLIMMERS.filter(g => !owned.has(g.id));
   if (!pool.length) return null;
@@ -1767,9 +1910,9 @@ async function maybeFollowUp(entryId) {
   try {
     const q = await askClaude(
       'A child named ' + currentKid.name + ' just wrote this in their gratitude journal (the prompt was "' + rec.prompt + '"): "' + rec.text + '". ' +
-      'Reply with exactly ONE warm, curious follow-up question, under 15 words, that helps them savor the moment a little more. Reply with only the question.',
+      'Reply with exactly ONE warm, curious follow-up question, under 15 words, that invites them to reflect a little deeper. Reply with only the question.',
       {
-        system: 'You are a gentle, playful creature living in a children\'s gratitude journal app. Ask simple, warm questions a young child can answer out loud. Never give advice, never be negative, never ask about anything scary or sad.',
+        system: 'You are a warm, curious creature living in a gratitude journal used by kids aged 9–12. Ask one genuine follow-up question that invites real reflection — about feelings, specific details, or why the moment mattered. Respect their intelligence: never babyish, never advice, never negative or scary.',
         maxTokens: 60
       }
     );
@@ -1847,7 +1990,7 @@ async function generateInsights(kind) {
     const es = entriesFor(currentKid.id).filter(e => e.date >= cutoff);
     if (!es.length) { toast('Fill your jar this week first! 🫙'); return; }
     const s = statsFor(currentKid.id);
-    system = 'You are a magical, kind creature who lives in a child\'s gratitude jar. Speak directly to the child in simple, joyful words a young reader understands. Under 80 words. Plain text, a couple of emoji are okay. Only celebrate — never criticize.';
+    system = 'You are a magical, kind creature who lives in a gratitude jar, speaking directly to a smart kid aged 9–12. Celebrate the specific things they wrote and thoughtfully reflect their week\'s themes back to them — no baby talk. Under 90 words. Plain text, a couple of emoji are okay. Only celebrate — never criticize.';
     prompt = 'Here is what ' + currentKid.name + ' put in their gratitude jar this week (their streak is ' + s.currentStreak + ' nights):\n' +
       es.map(e => '- ' + e.text).join('\n') +
       '\n\nTell ' + currentKid.name + ' what their jar glowed about this week, cheer for their streak, and end with one tiny wonder-question to think about tomorrow.';
@@ -2035,6 +2178,76 @@ async function enableReminders() {
   toast('This browser can\'t schedule reminders — try a Clock alarm ⏰');
 }
 
+// ---------- make it yours (avatar editor) ----------
+document.getElementById('who-avatar').addEventListener('click', () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box stuff-box';
+
+  const h = document.createElement('h3');
+  h.textContent = 'Make it yours! 🎨';
+
+  let selAvatar = personAvatar(currentKid);
+  let selTint = personTint(currentKid);
+
+  const grid = document.createElement('div');
+  grid.className = 'avatar-grid';
+  const avBtns = AVATAR_CHOICES.map((a) => {
+    const b = document.createElement('button');
+    b.className = 'avatar-choice' + (a === selAvatar ? ' sel' : '');
+    b.textContent = a;
+    b.addEventListener('click', () => {
+      selAvatar = a;
+      avBtns.forEach(x => x.classList.toggle('sel', x.textContent === a));
+    });
+    grid.appendChild(b);
+    return b;
+  });
+
+  const tintRow = document.createElement('div');
+  tintRow.className = 'tint-row';
+  const tintBtns = TINT_CHOICES.map((t) => {
+    const b = document.createElement('button');
+    b.className = 'tint-choice' + (t.tint === selTint ? ' sel' : '');
+    b.style.background = t.solid;
+    b.setAttribute('aria-label', 'glow color');
+    b.addEventListener('click', () => {
+      selTint = t.tint;
+      tintBtns.forEach((x, i) => x.classList.toggle('sel', TINT_CHOICES[i].tint === selTint));
+    });
+    tintRow.appendChild(b);
+    return b;
+  });
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const cancel = document.createElement('button');
+  cancel.className = 'btn-secondary';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => overlay.remove());
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'That\'s me! ✨';
+  ok.addEventListener('click', () => {
+    data.records['profile_' + currentKid.id] = {
+      id: 'profile_' + currentKid.id, type: 'profile', personId: currentKid.id,
+      avatar: selAvatar, tint: selTint, updatedAt: Date.now()
+    };
+    syncAfterChange();
+    document.getElementById('who-avatar').textContent = selAvatar;
+    overlay.remove();
+    confettiBurst(25);
+    toast('Looking great! ✨');
+  });
+  btnRow.append(cancel, ok);
+
+  box.append(h, grid, tintRow, btnRow);
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+});
+
 // ---------- settings ----------
 function makeInput(type, placeholder, value) {
   const i = document.createElement('input');
@@ -2063,7 +2276,9 @@ function makeNote(parent, text) {
   parent.appendChild(n);
 }
 
-document.getElementById('settings-btn').addEventListener('click', () => {
+document.getElementById('settings-btn').addEventListener('click', () => requireParentPin(openSettings));
+
+function openSettings() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const box = document.createElement('div');
@@ -2121,6 +2336,36 @@ document.getElementById('settings-btn').addEventListener('click', () => {
   rem.appendChild(remBtn);
   makeNote(rem, 'First install the app: Chrome menu → Add to Home screen. Reminders nudge in the evening if a jar is empty that day — Android decides exact timing. For a can\'t-miss reminder, also set a daily Google Clock alarm or Family Bell.');
 
+  // profile codes (PINs)
+  const pins = makeSection(box, 'Profile codes (PINs)');
+  const pinInputs = {};
+  for (const p of PEOPLE) {
+    const i = makeInput('text', p.name + ' — 4 digits (blank = no code)', pinFor(p.id));
+    i.inputMode = 'numeric';
+    i.maxLength = 4;
+    pinInputs[p.id] = i;
+    pins.appendChild(i);
+  }
+  const pinBtn = document.createElement('button');
+  pinBtn.className = 'btn-small';
+  pinBtn.textContent = '💾 Save codes';
+  pinBtn.addEventListener('click', () => {
+    for (const p of PEOPLE) {
+      const v = pinInputs[p.id].value.trim();
+      if (v && !/^\d{4}$/.test(v)) { toast(p.name + '\'s code must be exactly 4 digits'); return; }
+    }
+    for (const p of PEOPLE) {
+      const v = pinInputs[p.id].value.trim();
+      if (v !== pinFor(p.id)) {
+        data.records['pin_' + p.id] = { id: 'pin_' + p.id, type: 'pin', personId: p.id, pin: v, updatedAt: Date.now() };
+      }
+    }
+    syncAfterChange();
+    toast('Codes saved 🔒');
+  });
+  pins.appendChild(pinBtn);
+  makeNote(pins, 'A courtesy lock for sibling privacy, not encryption. Your parent code also opens the girls\' jars and this settings screen. Codes sync to every phone.');
+
   // keepsakes & backup
   const keep = makeSection(box, 'Keepsakes & backup');
   const whoSel = document.createElement('select');
@@ -2170,7 +2415,7 @@ document.getElementById('settings-btn').addEventListener('click', () => {
   overlay.appendChild(box);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
-});
+}
 
 // ---------- service worker meta (reminder data) ----------
 function updateSWMeta() {
