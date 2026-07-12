@@ -1,0 +1,2213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Wonder Jar ✨</title>
+<meta name="theme-color" content="#0b0c2a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night-1: #0b0c2a;
+    --night-2: #1a1b4b;
+    --night-3: #2b2a6b;
+    --glow: #ffd66b;
+    --glow-soft: #ffe9ad;
+    --lavender: #b8a9f5;
+    --pink: #f5a9d0;
+    --teal: #7be0d6;
+    --surface: #23245c;
+    --surface-2: #2e2f70;
+    --text: #f4f2ff;
+    --text-dim: #b9b6e0;
+    --radius: 20px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: linear-gradient(180deg, var(--night-1) 0%, var(--night-2) 55%, var(--night-3) 100%);
+    color: var(--text);
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  h1, h2, h3, .display { font-family: 'Fredoka', sans-serif; }
+  button { font-family: inherit; border: none; cursor: pointer; color: inherit; background: none; }
+
+  /* ---------- star field ---------- */
+  #stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .star {
+    position: absolute; border-radius: 50%;
+    background: #fff;
+    animation: twinkle 3s ease-in-out infinite;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: .2; transform: scale(.8); }
+    50% { opacity: .9; transform: scale(1.15); }
+  }
+  .shooting {
+    position: absolute; width: 90px; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(255,255,255,0), #fff);
+    animation: shoot 1.1s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes shoot {
+    from { transform: translate(0,0) rotate(-25deg); opacity: 1; }
+    to { transform: translate(-220px, 100px) rotate(-25deg); opacity: 0; }
+  }
+
+  /* ---------- screens ---------- */
+  .screen {
+    position: fixed; inset: 0; z-index: 1;
+    display: none; flex-direction: column;
+    padding: calc(env(safe-area-inset-top) + 16px) 20px calc(env(safe-area-inset-bottom) + 16px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .screen.active { display: flex; }
+
+  /* ---------- profile screen ---------- */
+  #screen-profiles { align-items: center; justify-content: center; text-align: center; gap: 10px; }
+  .app-title {
+    font-size: 44px; font-weight: 700;
+    background: linear-gradient(90deg, var(--glow-soft), var(--glow), var(--pink));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 18px rgba(255, 214, 107, .35));
+  }
+  .app-sub { color: var(--text-dim); font-size: 17px; max-width: 300px; margin-bottom: 26px; }
+  .kid-cards { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+  .kid-card {
+    width: 150px; padding: 22px 12px 18px;
+    background: radial-gradient(120% 120% at 50% 0%, var(--surface-2), var(--surface));
+    border: 2px solid rgba(255,255,255,.08);
+    border-radius: 26px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .kid-card:active { transform: scale(.94); }
+  .kid-avatar {
+    width: 76px; height: 76px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 42px;
+  }
+  .kid-name { font-family: 'Fredoka'; font-size: 22px; font-weight: 600; }
+  .kid-stat { font-size: 13px; color: var(--text-dim); }
+  .profiles-hint { margin-top: 34px; color: var(--text-dim); font-size: 14px; opacity: .8; }
+
+  /* ---------- journal header ---------- */
+  .top-bar { display: flex; align-items: center; gap: 10px; z-index: 3; }
+  .icon-btn {
+    min-width: 44px; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; border-radius: 14px;
+    background: rgba(255,255,255,.08);
+  }
+  .icon-btn:active { transform: scale(.92); }
+  .who { display: flex; align-items: center; gap: 8px; font-family: 'Fredoka'; font-size: 19px; font-weight: 600; flex: 1; }
+  .who .mini-avatar { font-size: 26px; }
+  .chips { display: flex; gap: 8px; }
+  .chip {
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(255,255,255,.1);
+    border-radius: 999px; padding: 8px 12px;
+    font-weight: 800; font-size: 14px;
+  }
+  .chip.pop { animation: chipPop .5s ease; }
+  @keyframes chipPop { 40% { transform: scale(1.35); } }
+
+  /* ---------- jar ---------- */
+  #jar-zone {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  #jar-wrap { position: relative; width: 210px; height: 240px; }
+  #jar-svg { width: 100%; height: 100%; display: block; }
+  #fireflies { position: absolute; inset: 22px 26px 14px; overflow: hidden; pointer-events: none; }
+  .firefly {
+    position: absolute; width: 10px; height: 10px; border-radius: 50%;
+    background: var(--glow);
+    box-shadow: 0 0 10px 4px rgba(255, 214, 107, .55);
+    animation: floaty 6s ease-in-out infinite alternate, glowpulse 2.4s ease-in-out infinite;
+  }
+  @keyframes floaty {
+    from { transform: translate(0, 0); }
+    to { transform: translate(var(--dx, 20px), var(--dy, -30px)); }
+  }
+  @keyframes glowpulse {
+    0%, 100% { opacity: .55; } 50% { opacity: 1; }
+  }
+  #jar-count {
+    position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+    font-size: 13px; color: var(--text-dim); white-space: nowrap;
+  }
+  #memory-bubble {
+    position: absolute; top: -8px; left: 50%; transform: translateX(-50%) scale(0);
+    width: 240px; padding: 12px 16px;
+    background: var(--glow-soft); color: #4a3a10;
+    border-radius: 18px; font-size: 15px; font-weight: 700; text-align: center;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1);
+    z-index: 5; pointer-events: none;
+  }
+  #memory-bubble.show { transform: translateX(-50%) scale(1); }
+  #memory-bubble .mem-date { display: block; font-size: 11px; opacity: .7; margin-top: 4px; }
+
+  /* ---------- prompt card ---------- */
+  #prompt-card {
+    margin-top: 18px;
+    background: radial-gradient(140% 140% at 50% 0%, var(--surface-2), var(--surface));
+    border: 2px solid rgba(184, 169, 245, .25);
+    border-radius: var(--radius);
+    padding: 18px 18px 14px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  #prompt-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--lavender); font-weight: 800; }
+  #prompt-text { font-family: 'Fredoka'; font-size: 21px; font-weight: 600; margin-top: 6px; line-height: 1.3; }
+  #shuffle-btn {
+    margin-top: 10px; min-height: 44px; padding: 0 18px;
+    border-radius: 999px; background: rgba(184,169,245,.15);
+    color: var(--lavender); font-weight: 800; font-size: 14px;
+  }
+  #shuffle-btn:active { transform: rotate(-3deg) scale(.95); }
+
+  /* ---------- mic / capture ---------- */
+  #capture-zone {
+    display: flex; flex-direction: column; align-items: center;
+    margin-top: auto; padding-top: 18px; gap: 10px;
+    flex-shrink: 0;
+  }
+  #mic-btn {
+    width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ffe9ad, #ffc93c 60%, #e8a30c);
+    box-shadow: 0 0 0 0 rgba(255, 214, 107, .5), 0 8px 24px rgba(0,0,0,.4);
+    font-size: 40px;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s ease;
+    animation: breathe 2.6s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,214,107,.45), 0 8px 24px rgba(0,0,0,.4); }
+    50% { box-shadow: 0 0 0 16px rgba(255,214,107,0), 0 8px 24px rgba(0,0,0,.4); }
+  }
+  #mic-btn:active { transform: scale(.92); }
+  #mic-btn.listening {
+    animation: none;
+    background: radial-gradient(circle at 35% 30%, #ffb3d1, #f56fa1 60%, #d1447e);
+  }
+  .ring {
+    position: absolute; border-radius: 50%;
+    border: 3px solid rgba(245, 111, 161, .6);
+    animation: ringout 1.4s ease-out infinite;
+    pointer-events: none;
+  }
+  @keyframes ringout {
+    from { width: 92px; height: 92px; opacity: 1; }
+    to { width: 190px; height: 190px; opacity: 0; }
+  }
+  #mic-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
+  #mic-hint { font-size: 15px; color: var(--text-dim); font-weight: 700; min-height: 22px; text-align: center; }
+  #type-link { color: var(--lavender); font-size: 14px; font-weight: 800; min-height: 44px; display: flex; align-items: center; }
+
+  /* ---------- transcript bubble ---------- */
+  #transcript-zone { display: none; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; margin: 0 auto; }
+  #transcript-zone.show { display: flex; }
+  #transcript-box {
+    width: 100%; min-height: 84px;
+    background: #fffbe9; color: #3c2f0a;
+    border: none; border-radius: 18px;
+    padding: 14px 16px; font-size: 18px; font-weight: 700;
+    font-family: 'Nunito'; line-height: 1.4;
+    resize: none; outline: none;
+  }
+  .capture-actions { display: flex; gap: 10px; }
+  .btn-big {
+    flex: 1; min-height: 54px; border-radius: 16px;
+    font-family: 'Fredoka'; font-size: 18px; font-weight: 600;
+  }
+  .btn-save {
+    background: linear-gradient(135deg, #ffd66b, #ff9d3c);
+    color: #4a2c05;
+    box-shadow: 0 6px 18px rgba(255, 157, 60, .35);
+  }
+  .btn-save:active { transform: scale(.96); }
+  .btn-redo { background: rgba(255,255,255,.1); color: var(--text-dim); flex: 0 0 92px; }
+
+  /* ---------- flying firefly ---------- */
+  .fly-firefly {
+    position: fixed; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--glow);
+    box-shadow: 0 0 16px 8px rgba(255,214,107,.7);
+    z-index: 50; pointer-events: none;
+    transition: transform 1s cubic-bezier(.45,.05,.55,1.4), opacity 1s ease;
+  }
+
+  /* ---------- reveal / modal ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(5, 5, 25, .82);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 24px;
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .modal-box {
+    background: radial-gradient(130% 130% at 50% 0%, var(--surface-2), var(--surface));
+    border: 2px solid rgba(255,255,255,.1);
+    border-radius: 26px; padding: 26px 22px;
+    max-width: 90vw; width: 340px; text-align: center;
+  }
+  .modal-box h3 { font-size: 22px; margin-bottom: 8px; }
+  .modal-box p { color: var(--text-dim); font-size: 15px; line-height: 1.45; }
+  .modal-buttons { display: flex; gap: 12px; margin-top: 20px; }
+  .modal-buttons button { flex: 1; min-height: 48px; border-radius: 14px; font-size: 16px; font-weight: 800; }
+  .btn-primary { background: linear-gradient(135deg, #ffd66b, #ff9d3c); color: #4a2c05; }
+  .btn-secondary { background: rgba(255,255,255,.1); color: var(--text-dim); }
+
+  .reveal-box { position: relative; overflow: visible; }
+  .reveal-burst {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    font-size: 30px; animation: burstUp 1s ease-out forwards;
+  }
+  @keyframes burstUp { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -60px); } }
+  .reveal-emoji {
+    font-size: 92px; line-height: 1.1; display: block;
+    animation: hatch .7s cubic-bezier(.34,1.56,.64,1);
+    filter: drop-shadow(0 0 24px rgba(255,214,107,.5));
+  }
+  @keyframes hatch { from { transform: scale(0) rotate(-30deg); } to { transform: scale(1) rotate(0); } }
+  .reveal-rarity { font-size: 14px; letter-spacing: 3px; font-weight: 800; margin-top: 6px; }
+  .rarity-common { color: var(--teal); }
+  .rarity-rare { color: var(--lavender); }
+  .rarity-legendary { color: var(--glow); text-shadow: 0 0 12px rgba(255,214,107,.6); }
+  .reveal-name { font-family: 'Fredoka'; font-size: 26px; font-weight: 700; margin-top: 2px; }
+  .reveal-line { color: var(--text-dim); font-size: 15px; margin-top: 8px; font-style: italic; }
+
+  /* ---------- confetti ---------- */
+  .confetti {
+    position: fixed; width: 10px; height: 10px; z-index: 120; pointer-events: none;
+    animation: confallin var(--t, 1.6s) ease-in forwards;
+  }
+  @keyframes confallin {
+    from { transform: translate(0, 0) rotate(0); opacity: 1; }
+    to { transform: translate(var(--cx, 0px), 105vh) rotate(720deg); opacity: .9; }
+  }
+
+  /* ---------- collection ---------- */
+  #collection-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px;
+  }
+  .glimmer-cell {
+    background: rgba(255,255,255,.06);
+    border-radius: 18px; padding: 12px 6px 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    min-height: 92px; justify-content: center;
+  }
+  .glimmer-cell .g-emoji { font-size: 38px; }
+  .glimmer-cell.locked .g-emoji { filter: grayscale(1) brightness(.35); }
+  .glimmer-cell .g-name { font-size: 11px; font-weight: 800; color: var(--text-dim); text-align: center; }
+  .glimmer-cell.locked .g-name { color: rgba(255,255,255,.25); }
+
+  .toast {
+    position: fixed; bottom: calc(env(safe-area-inset-bottom) + 24px); left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-2); color: var(--text);
+    padding: 12px 20px; border-radius: 999px; font-weight: 800; font-size: 14px;
+    z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+    animation: toastIn .25s ease;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } }
+
+  /* ---------- grown-ups + profile actions ---------- */
+  .grownups-row { display: flex; gap: 12px; margin-top: 18px; justify-content: center; }
+  .kid-card.parent { width: 118px; padding: 14px 10px 12px; opacity: .92; }
+  .kid-card.parent .kid-avatar { width: 52px; height: 52px; font-size: 28px; }
+  .kid-card.parent .kid-name { font-size: 16px; }
+  .profile-actions { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; justify-content: center; }
+  .pill-btn {
+    min-height: 44px; padding: 0 18px; border-radius: 999px;
+    background: rgba(255,255,255,.08); color: var(--text-dim);
+    font-weight: 800; font-size: 14px;
+  }
+  .pill-btn:active { transform: scale(.95); }
+
+  /* ---------- sync dot ---------- */
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.25); flex-shrink: 0; }
+  .sync-dot.ok { background: #7be0a0; }
+  .sync-dot.pending { background: var(--glow); animation: glowpulse 1s ease-in-out infinite; }
+  .sync-dot.err { background: #f56f6f; }
+
+  /* ---------- settings / forms ---------- */
+  .settings-box { max-height: 82vh; overflow-y: auto; text-align: left; }
+  .settings-section { margin-top: 18px; }
+  .settings-section h4 { font-family: 'Fredoka'; font-size: 15px; color: var(--lavender); margin-bottom: 8px; }
+  .text-input {
+    width: 100%; min-height: 44px; border: 1px solid rgba(255,255,255,.15); border-radius: 12px;
+    background: rgba(0,0,0,.25); color: var(--text); padding: 10px 12px;
+    font-family: 'Nunito'; font-size: 15px; outline: none; margin-bottom: 8px;
+  }
+  select.text-input { appearance: none; -webkit-appearance: none; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn-small {
+    min-height: 44px; padding: 0 14px; border-radius: 12px;
+    background: rgba(184,169,245,.15); color: var(--lavender); font-weight: 800; font-size: 13px;
+  }
+  .settings-note { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
+
+  /* ---------- tabs + treasures modal ---------- */
+  .tab-row { display: flex; gap: 6px; margin-top: 14px; }
+  .tab-btn {
+    flex: 1; min-height: 44px; border-radius: 12px; font-weight: 800; font-size: 13px;
+    background: rgba(255,255,255,.06); color: var(--text-dim);
+  }
+  .tab-btn.active { background: rgba(184,169,245,.25); color: var(--text); }
+  .stuff-box { max-height: 82vh; overflow-y: auto; }
+  #tab-content { margin-top: 14px; }
+
+  /* ---------- entries list ---------- */
+  .entry-row {
+    background: rgba(255,255,255,.06); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+    text-align: left;
+  }
+  .entry-text { font-size: 15px; font-weight: 700; line-height: 1.4; }
+  .entry-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .entry-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .entry-actions button { min-height: 44px; padding: 0 12px; border-radius: 10px; font-weight: 800; font-size: 13px; background: rgba(255,255,255,.08); color: var(--text-dim); }
+  .heart-btn.hearted { background: rgba(245,111,161,.25); color: #ffb3d1; }
+
+  /* ---------- badge cells ---------- */
+  .glimmer-cell .g-desc { font-size: 10px; color: rgba(255,255,255,.35); text-align: center; }
+
+  /* ---------- sky screen ---------- */
+  #screen-sky { align-items: stretch; }
+  #sky-stars { position: relative; height: 32vh; min-height: 180px; flex-shrink: 0; }
+  .sky-star { position: absolute; border-radius: 50%; background: var(--glow-soft); box-shadow: 0 0 6px 2px rgba(255,214,107,.35); animation: twinkle 3s ease-in-out infinite; }
+  .sky-sub { text-align: center; color: var(--text-dim); font-size: 14px; margin-top: 4px; }
+  .progress-track { height: 14px; border-radius: 999px; background: rgba(255,255,255,.1); margin: 14px 0 4px; overflow: hidden; flex-shrink: 0; }
+  .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--glow), var(--pink)); transition: width .6s ease; }
+  .progress-label { font-size: 13px; color: var(--text-dim); text-align: center; }
+  #rewards-list { margin-top: 14px; }
+  .reward-row {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,.06); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .reward-row.locked { opacity: .45; }
+  .reward-emoji { font-size: 28px; }
+  .reward-info { flex: 1; }
+  .reward-name { font-weight: 800; font-size: 15px; }
+  .reward-at { font-size: 12px; color: var(--text-dim); }
+  .reward-claim { min-height: 44px; padding: 0 14px; border-radius: 12px; background: linear-gradient(135deg, #ffd66b, #ff9d3c); color: #4a2c05; font-weight: 800; font-size: 13px; }
+  .reward-claimed { font-size: 13px; color: #7be0a0; font-weight: 800; }
+
+  /* ---------- follow-up card ---------- */
+  #followup-card {
+    width: 100%; max-width: 420px; margin: 0 auto 10px;
+    background: radial-gradient(140% 140% at 50% 0%, var(--surface-2), var(--surface));
+    border: 2px solid rgba(255,214,107,.35); border-radius: 18px; padding: 14px 16px;
+    text-align: center;
+  }
+  #followup-card .fu-who { font-size: 13px; color: var(--lavender); font-weight: 800; }
+  #followup-card .fu-q { font-family: 'Fredoka'; font-size: 18px; margin-top: 6px; }
+
+  /* ---------- reaction discovery ---------- */
+  .reaction-heart { font-size: 72px; display: block; animation: hatch .7s cubic-bezier(.34,1.56,.64,1); }
+  .reaction-quote { background: #fffbe9; color: #3c2f0a; border-radius: 14px; padding: 10px 14px; font-weight: 700; font-size: 15px; margin-top: 10px; }
+  .reaction-note { color: var(--glow-soft); font-style: italic; margin-top: 8px; font-size: 15px; }
+
+  /* ---------- print keepsake ---------- */
+  #print-book { display: none; }
+  @media print {
+    body { position: static !important; overflow: visible !important; background: #fff !important; }
+    #stars, .screen, .modal-overlay, .toast, #followup-card, .fly-firefly, .confetti { display: none !important; }
+    #print-book { display: block; color: #2a2118; font-family: Georgia, 'Times New Roman', serif; padding: 24px; }
+    #print-book h1 { font-size: 28px; text-align: center; margin-bottom: 4px; }
+    #print-book .pb-sub { text-align: center; font-style: italic; color: #6b5d42; margin-bottom: 24px; }
+    #print-book h2 { font-size: 20px; margin: 22px 0 10px; border-bottom: 1px solid #d9cba8; padding-bottom: 4px; page-break-after: avoid; }
+    .pb-entry { margin-bottom: 14px; page-break-inside: avoid; }
+    .pb-text { font-size: 15px; line-height: 1.5; }
+    .pb-meta { font-size: 12px; color: #6b5d42; margin-top: 2px; }
+  }
+
+  @media (max-height: 700px) {
+    #jar-wrap { width: 170px; height: 195px; }
+    .app-title { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+<div id="stars"></div>
+
+<!-- ============ PROFILE PICKER ============ -->
+<section class="screen active" id="screen-profiles">
+  <h1 class="app-title">Wonder Jar</h1>
+  <p class="app-sub">Whisper your happy thoughts into the jar and watch them glow ✨</p>
+  <div class="kid-cards" id="kid-cards"></div>
+  <div class="grownups-row" id="grownup-cards"></div>
+  <p class="profiles-hint">Who's filling their jar tonight?</p>
+  <div class="profile-actions">
+    <button class="pill-btn" id="sky-btn">🌌 Our Family Sky</button>
+    <button class="pill-btn" id="settings-btn">⚙️ Grown-up stuff</button>
+  </div>
+</section>
+
+<!-- ============ JOURNAL ============ -->
+<section class="screen" id="screen-journal">
+  <div class="top-bar">
+    <button class="icon-btn" id="back-btn" aria-label="Back">←</button>
+    <div class="who"><span class="mini-avatar" id="who-avatar"></span><span id="who-name"></span><span class="sync-dot" id="sync-dot"></span></div>
+    <div class="chips">
+      <div class="chip" id="chip-streak">🔥 <span id="streak-num">0</span></div>
+      <div class="chip" id="chip-sparks">⭐ <span id="sparks-num">0</span></div>
+      <div class="chip" id="chip-wish" style="display:none">🪄 <span id="wish-num">0</span></div>
+      <button class="icon-btn" id="collection-btn" aria-label="My treasures">🎒</button>
+    </div>
+  </div>
+
+  <div id="jar-zone">
+    <div id="memory-bubble"></div>
+    <div id="jar-wrap">
+      <svg id="jar-svg" viewBox="0 0 210 240">
+        <defs>
+          <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="rgba(190,210,255,.16)"/>
+            <stop offset=".5" stop-color="rgba(190,210,255,.05)"/>
+            <stop offset="1" stop-color="rgba(190,210,255,.18)"/>
+          </linearGradient>
+          <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#d8b45a"/>
+            <stop offset="1" stop-color="#a67c2e"/>
+          </linearGradient>
+        </defs>
+        <rect x="55" y="6" width="100" height="24" rx="8" fill="url(#lid)"/>
+        <rect x="50" y="26" width="110" height="8" rx="4" fill="#8a6423"/>
+        <path d="M60 34 L60 52 Q30 70 30 110 L30 200 Q30 228 58 228 L152 228 Q180 228 180 200 L180 110 Q180 70 150 52 L150 34 Z"
+              fill="url(#glass)" stroke="rgba(210,225,255,.35)" stroke-width="3"/>
+        <path d="M66 60 Q46 76 44 106" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+      <div id="fireflies"></div>
+    </div>
+    <div id="jar-count"></div>
+  </div>
+
+  <div id="prompt-card">
+    <div id="prompt-label">✦ Tonight's wonder question ✦</div>
+    <div id="prompt-text"></div>
+    <button id="shuffle-btn">🎲 Different question!</button>
+  </div>
+
+  <div id="capture-zone">
+    <div id="mic-wrap">
+      <button id="mic-btn" aria-label="Talk">🎤</button>
+    </div>
+    <div id="mic-hint">Tap the mic and tell me!</div>
+    <button id="type-link">…or type it instead ✏️</button>
+
+    <div id="transcript-zone">
+      <textarea id="transcript-box" rows="3" placeholder="Your happy thought…"></textarea>
+      <div class="capture-actions">
+        <button class="btn-big btn-redo" id="redo-btn">🎤 Redo</button>
+        <button class="btn-big btn-save" id="save-btn">Drop it in the jar! 🫙</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAMILY SKY ============ -->
+<section class="screen" id="screen-sky">
+  <div class="top-bar">
+    <button class="icon-btn" id="sky-back" aria-label="Back">←</button>
+    <div class="who">🌌 Our Family Sky</div>
+  </div>
+  <div id="sky-stars"></div>
+  <div class="sky-sub" id="sky-count"></div>
+  <div class="progress-track"><div class="progress-fill" id="sky-progress"></div></div>
+  <div class="progress-label" id="sky-progress-label"></div>
+  <div id="rewards-list"></div>
+</section>
+
+<!-- printable keepsake book (hidden except when printing) -->
+<div id="print-book"></div>
+
+<script>
+/* ============================================================
+   Wonder Jar — v1
+   Core loop: pick person → prompt → speak/type → firefly → reward
+   Gist sync (safe merge + tombstones) · badges · Wonder Wishes ·
+   family constellation · parent hearts · keepsake export · PWA
+   ============================================================ */
+
+// ---------- Arizona time helpers (canonical) ----------
+const AZ = {
+  tz: 'America/Phoenix',
+  today() { return new Intl.DateTimeFormat('en-CA', { timeZone: this.tz }).format(new Date()); },
+  dateKey(d) { return new Intl.DateTimeFormat('en-CA', { timeZone: this.tz }).format(d); },
+  pretty(dateStr) {
+    const [y, m, day] = dateStr.split('-').map(Number);
+    const d = new Date(y, m - 1, day);
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  },
+  daysBetween(a, b) {
+    return Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000);
+  }
+};
+
+// ---------- localStorage wrapper (canonical) ----------
+const Store = {
+  ns: 'wonderjar_',
+  get(key, fallback = null) {
+    try {
+      const raw = localStorage.getItem(this.ns + key);
+      return raw === null ? fallback : JSON.parse(raw);
+    } catch (e) { return fallback; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(this.ns + key, JSON.stringify(value)); return true; }
+    catch (e) { return false; }
+  },
+  remove(key) { localStorage.removeItem(this.ns + key); }
+};
+
+// ---------- Gist sync (canonical safe merge + tombstones) ----------
+const Sync = {
+  get gistId() { return Store.get('gist_id', ''); },
+  filename: 'wonder-jar-data.json',
+  headers() {
+    return {
+      'Authorization': 'Bearer ' + Store.get('gist_token', ''),
+      'Accept': 'application/vnd.github+json'
+    };
+  },
+
+  async pullRemote() {
+    const res = await fetch(`https://api.github.com/gists/${this.gistId}`, { headers: this.headers() });
+    if (!res.ok) throw new Error('Gist fetch failed: ' + res.status);
+    const gist = await res.json();
+    const file = gist.files[this.filename];
+    if (!file) return { records: {} };
+    const text = file.truncated ? await (await fetch(file.raw_url)).text() : file.content;
+    return JSON.parse(text || '{"records":{}}');
+  },
+
+  merge(local, remote) {
+    const out = { records: { ...remote.records } };
+    for (const [id, rec] of Object.entries(local.records || {})) {
+      const r = out.records[id];
+      if (!r || (rec.updatedAt || 0) > (r.updatedAt || 0)) out.records[id] = rec;
+    }
+    const cutoff = Date.now() - 60 * 86400000;
+    for (const [id, rec] of Object.entries(out.records)) {
+      if (rec.deleted && rec.updatedAt < cutoff) delete out.records[id];
+    }
+    return out;
+  },
+
+  async save(localData) {
+    let merged = localData;
+    try {
+      const remote = await this.pullRemote();
+      merged = this.merge(localData, remote);
+    } catch (e) { /* offline or first save — proceed with local */ }
+    const res = await fetch(`https://api.github.com/gists/${this.gistId}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: { [this.filename]: { content: JSON.stringify(merged, null, 2) } } })
+    });
+    if (!res.ok) throw new Error('Gist save failed: ' + res.status);
+    Store.set('data', merged);
+    return merged;
+  },
+
+  async load() {
+    const local = Store.get('data', { records: {} });
+    try {
+      const remote = await this.pullRemote();
+      const merged = this.merge(local, remote);
+      Store.set('data', merged);
+      return merged;
+    } catch (e) {
+      return local; // offline-first: local always works
+    }
+  }
+};
+
+function syncConfigured() { return !!(Store.get('gist_token') && Store.get('gist_id')); }
+function setSyncDot(state) {
+  const d = document.getElementById('sync-dot');
+  if (d) d.className = 'sync-dot' + (state ? ' ' + state : '');
+}
+function saveLocal() { Store.set('data', data); updateSWMeta(); }
+let syncTimer = null;
+function syncAfterChange() {
+  saveLocal();
+  if (!syncConfigured()) return;
+  setSyncDot('pending');
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    try { data = await Sync.save(data); saveLocal(); setSyncDot('ok'); }
+    catch (e) { setSyncDot('err'); toast('Sync hiccup — saved on this phone 💾'); }
+  }, 1500);
+}
+async function pullAndRender() {
+  if (!syncConfigured()) return;
+  setSyncDot('pending');
+  try {
+    data = await Sync.load();
+    saveLocal();
+    setSyncDot('ok');
+    refreshCurrentView();
+  } catch (e) { setSyncDot('err'); }
+}
+function refreshCurrentView() {
+  const active = document.querySelector('.screen.active');
+  if (!active) return;
+  if (active.id === 'screen-profiles') renderProfiles();
+  else if (active.id === 'screen-journal' && currentKid) { renderStats(); renderJarFireflies(); }
+  else if (active.id === 'screen-sky') openSky();
+}
+
+// ---------- static data ----------
+const PEOPLE = [
+  { id: 'sedona', name: 'Sedona', avatar: '🦋', tint: 'rgba(245,169,208,.25)', kid: true },
+  { id: 'river',  name: 'River',  avatar: '🦊', tint: 'rgba(123,224,214,.22)', kid: true },
+  { id: 'mom',    name: 'Mom',    avatar: '🌙', tint: 'rgba(184,169,245,.25)', kid: false },
+  { id: 'dad',    name: 'Dad',    avatar: '⭐', tint: 'rgba(255,214,107,.22)', kid: false }
+];
+const KIDS = PEOPLE.filter(p => p.kid);
+function personById(id) { return PEOPLE.find(p => p.id === id); }
+function personName(id) { const p = personById(id); return p ? p.name : id; }
+
+const PROMPTS = [
+  'What made you laugh SO hard today?',
+  'Who was extra kind to you today?',
+  'What was the yummiest thing you ate?',
+  'What did you see outside that was cool?',
+  'What are you excited about for tomorrow?',
+  'Who did you help today? How?',
+  'What is something your body did great today?',
+  'What made you feel cozy today?',
+  'What song or sound made you happy?',
+  'What is something you love about our family?',
+  'What was tricky today, and what got you through it?',
+  'If today was an animal, what animal? Why?',
+  'What did you make or build today?',
+  'What smell made you smile today?',
+  'What is your favorite thing in your room right now?',
+  'Who made you smile today without even trying?',
+  'What did you learn today that surprised you?',
+  'What was the bravest thing you did today?',
+  'Who gave you the best hug today?',
+  'What game or toy made today more fun?',
+  'What color was your day? Why?',
+  'What sound do you love falling asleep to?',
+  'What did someone teach you today?',
+  'What made your body feel strong today?',
+  'What place made you happy today?',
+  'What would you thank the sun for today?',
+  'Who do you want to be extra kind to tomorrow?',
+  'What tiny thing would you miss if it disappeared?',
+  'What food are you most thankful for this week?',
+  'What story or book are you glad exists?',
+  'What did you share today?',
+  'When did you feel proud of yourself today?',
+  'What made your family laugh together recently?',
+  'What is something outside your window to be thankful for?',
+  'If your pet or a bug could talk, what would you thank it for?',
+  'What is the coziest spot in our house? Why?',
+  'What superpower did your heart use today?'
+];
+
+const GLIMMERS = [
+  { id: 'shimmer',  emoji: '🐌', name: 'Shimmer the Snail',    rarity: 'common',    line: 'Slow days have sparkles too.' },
+  { id: 'giggle',   emoji: '🐸', name: 'Giggle the Frog',      rarity: 'common',    line: 'Hops highest after a big laugh!' },
+  { id: 'moonmouse',emoji: '🐭', name: 'Pip the Moon Mouse',   rarity: 'common',    line: 'Collects crumbs of happiness.' },
+  { id: 'hedge',    emoji: '🦔', name: 'Sparkle the Hedgehog', rarity: 'common',    line: 'Even prickly days can shine.' },
+  { id: 'luna',     emoji: '🦉', name: 'Luna the Owl',         rarity: 'rare',      line: 'Sees the good stuff in the dark.' },
+  { id: 'ember',    emoji: '🦊', name: 'Ember the Fox',        rarity: 'rare',      line: 'Warm thoughts keep her tail glowing.' },
+  { id: 'startle',  emoji: '🐢', name: 'Cosmo the Star Turtle',rarity: 'rare',      line: 'Carries a tiny galaxy on his shell.' },
+  { id: 'ladybug',  emoji: '🐞', name: 'Lucky the Ladybug',    rarity: 'common',    line: 'Lands on kids who notice little joys.' },
+  { id: 'gecko',    emoji: '🦎', name: 'Sunny the Gecko',      rarity: 'common',    line: 'An Arizona friend who loves warm walls.' },
+  { id: 'squirrel', emoji: '🐿️', name: 'Zippy the Squirrel',   rarity: 'common',    line: 'Stashes happy memories like acorns.' },
+  { id: 'bunny',    emoji: '🐰', name: 'Clover the Bunny',     rarity: 'common',    line: 'Hops three times for every thank-you.' },
+  { id: 'deer',     emoji: '🦌', name: 'Aurora the Deer',      rarity: 'rare',      line: 'Her antlers catch falling starlight.' },
+  { id: 'swan',     emoji: '🦢', name: 'Moonbeam the Swan',    rarity: 'rare',      line: 'Glides across the night without a ripple.' },
+  { id: 'dolphin',  emoji: '🐬', name: 'Splash the Star Dolphin', rarity: 'rare',   line: 'Leaps between the jar and the Milky Way.' },
+  { id: 'dragon',   emoji: '🐉', name: 'Wonder Dragon',        rarity: 'legendary', line: 'Only appears for the most grateful hearts!' },
+  { id: 'unicorn',  emoji: '🦄', name: 'Dream Unicorn',        rarity: 'legendary', line: 'Gallops through jars of pure joy!' },
+  { id: 'skywhale', emoji: '🐋', name: 'Sky Whale',            rarity: 'legendary', line: 'Swims between the stars, singing thank-yous.' },
+  { id: 'dino',     emoji: '🦕', name: 'Twilight the Dino',    rarity: 'legendary', line: 'Older than the stars, still saying thanks.' }
+];
+const RARITY_LABEL = { common: '★ GLIMMER', rare: '★★ RARE GLIMMER', legendary: '★★★ LEGENDARY!' };
+
+const SPARKS_PER_ENTRY = 10;
+const DISCOVERY_CHANCE = 0.45;
+const WISH_EVERY = 7; // earn a Wonder Wish every 7 entries
+
+const BADGES = [
+  { id: 'first_entry', name: 'First Steps', emoji: '🌱', desc: 'Drop your first thought in the jar', check: (s) => s.totalEntries >= 1 },
+  { id: 'entries_10', name: 'Jar Filler', emoji: '🫙', desc: '10 glowing thoughts', check: (s) => s.totalEntries >= 10 },
+  { id: 'entries_25', name: 'Gratitude Gardener', emoji: '🌻', desc: '25 glowing thoughts', check: (s) => s.totalEntries >= 25 },
+  { id: 'entries_50', name: 'Wonder Keeper', emoji: '🌟', desc: '50 glowing thoughts', check: (s) => s.totalEntries >= 50 },
+  { id: 'entries_100', name: 'Century of Thanks', emoji: '💯', desc: '100 glowing thoughts', check: (s) => s.totalEntries >= 100 },
+  { id: 'streak_3', name: 'Spark Starter', emoji: '⚡', desc: '3 nights in a row', check: (s) => s.currentStreak >= 3 },
+  { id: 'streak_7', name: 'On Fire', emoji: '🔥', desc: '7 nights in a row', check: (s) => s.currentStreak >= 7 },
+  { id: 'streak_14', name: 'Fortnight of Wonder', emoji: '🌈', desc: '14 nights in a row', check: (s) => s.currentStreak >= 14 },
+  { id: 'streak_30', name: 'Moon Cycle', emoji: '🌕', desc: '30 nights in a row', check: (s) => s.currentStreak >= 30 },
+  { id: 'glimmer_5', name: 'Friend Finder', emoji: '🐾', desc: 'Discover 5 Glimmers', check: (s, kid) => glimmersFor(kid).size >= 5 },
+  { id: 'glimmer_legendary', name: 'Legend Hunter', emoji: '🏆', desc: 'Discover a legendary Glimmer', check: (s, kid) => [...glimmersFor(kid)].some(id => (GLIMMERS.find(g => g.id === id) || {}).rarity === 'legendary') },
+  { id: 'glimmer_all', name: 'Glimmer Master', emoji: '👑', desc: 'Discover every single Glimmer', check: (s, kid) => glimmersFor(kid).size >= GLIMMERS.length }
+];
+
+const MILESTONES = [
+  { at: 10,  emoji: '🍦', name: 'Ice cream night' },
+  { at: 25,  emoji: '🎬', name: 'Family movie night' },
+  { at: 50,  emoji: '🌳', name: 'Park adventure day' },
+  { at: 100, emoji: '🍕', name: 'Pizza party' },
+  { at: 150, emoji: '🌙', name: 'Stay-up-late pass' },
+  { at: 200, emoji: '🎲', name: 'Family game night feast' },
+  { at: 300, emoji: '🎢', name: 'Special day out' },
+  { at: 400, emoji: '⛺', name: 'Backyard campout' },
+  { at: 500, emoji: '🎁', name: 'Big family surprise' }
+];
+
+// ---------- app state ----------
+let data = Store.get('data', { records: {} });
+let currentKid = null;
+let currentPrompt = '';
+let recognizing = false;
+let recognition = null;
+
+// ---------- helpers over records ----------
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+function entriesFor(kidId) {
+  return Object.values(data.records)
+    .filter(r => r.type === 'entry' && r.kidId === kidId && !r.deleted)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+function glimmersFor(kidId) {
+  const owned = new Set();
+  for (const r of Object.values(data.records)) {
+    if (r.type === 'glimmer' && r.kidId === kidId && !r.deleted) owned.add(r.glimmerId);
+  }
+  return owned;
+}
+function badgesFor(kidId) {
+  const owned = new Set();
+  for (const r of Object.values(data.records)) {
+    if (r.type === 'badge' && r.kidId === kidId && !r.deleted) owned.add(r.badgeId);
+  }
+  return owned;
+}
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return AZ.dateKey(d);
+}
+
+function statsFor(kidId) {
+  const entries = entriesFor(kidId);
+  const entryDates = new Set(entries.map(e => e.date));
+  const spent = Object.values(data.records).filter(r => r.type === 'wishspent' && r.kidId === kidId && !r.deleted);
+  const spentDates = new Set(spent.map(r => r.date));
+  let available = Math.floor(entries.length / WISH_EVERY) - spent.length;
+
+  const filled = (d) => entryDates.has(d) || spentDates.has(d);
+  let streak = 0;
+  let wishUsedNow = false;
+  if (entries.length) {
+    let cursor = AZ.today();
+    if (!filled(cursor)) cursor = addDays(cursor, -1); // grace: tonight isn't over yet
+    while (true) {
+      if (filled(cursor)) {
+        streak++;
+        cursor = addDays(cursor, -1);
+      } else if (available > 0 && streak > 0 && filled(addDays(cursor, -1))) {
+        // exactly one missing night inside the chain — a Wonder Wish patches it
+        const key = 'wishspent_' + kidId + '_' + cursor;
+        data.records[key] = { id: key, type: 'wishspent', kidId, date: cursor, updatedAt: Date.now() };
+        spentDates.add(cursor);
+        available--;
+        wishUsedNow = true;
+      } else break;
+    }
+  }
+  const sparks = entries.length * SPARKS_PER_ENTRY + glimmersFor(kidId).size * 5 + badgesFor(kidId).size * 20;
+  return {
+    totalEntries: entries.length,
+    currentStreak: streak,
+    sparks,
+    wishes: Math.max(0, available),
+    wishUsedNow
+  };
+}
+
+function evaluateBadges(kidId) {
+  const stats = statsFor(kidId);
+  const newlyEarned = [];
+  for (const b of BADGES) {
+    const key = `badge_${kidId}_${b.id}`;
+    const existing = data.records[key];
+    if ((!existing || existing.deleted) && b.check(stats, kidId)) {
+      data.records[key] = { id: key, type: 'badge', kidId, badgeId: b.id, earnedAt: AZ.today(), updatedAt: Date.now() };
+      newlyEarned.push(b);
+    }
+  }
+  return newlyEarned;
+}
+
+// ---------- star field ----------
+(function makeStars() {
+  const holder = document.getElementById('stars');
+  for (let i = 0; i < 60; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = 1 + Math.random() * 2.4;
+    s.style.width = s.style.height = size + 'px';
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = Math.random() * 100 + '%';
+    s.style.animationDelay = (Math.random() * 3) + 's';
+    s.style.animationDuration = (2 + Math.random() * 3) + 's';
+    holder.appendChild(s);
+  }
+  setInterval(() => {
+    if (Math.random() < 0.35) {
+      const sh = document.createElement('div');
+      sh.className = 'shooting';
+      sh.style.left = (30 + Math.random() * 60) + '%';
+      sh.style.top = (Math.random() * 30) + '%';
+      holder.appendChild(sh);
+      setTimeout(() => sh.remove(), 1200);
+    }
+  }, 4000);
+})();
+
+// ---------- screens ----------
+function show(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+}
+
+// ---------- profile screen ----------
+function makePersonCard(person) {
+  const stats = statsFor(person.id);
+  const card = document.createElement('button');
+  card.className = 'kid-card' + (person.kid ? '' : ' parent');
+
+  const av = document.createElement('div');
+  av.className = 'kid-avatar';
+  av.style.background = person.tint;
+  av.textContent = person.avatar;
+
+  const nm = document.createElement('div');
+  nm.className = 'kid-name';
+  nm.textContent = person.name;
+
+  const st = document.createElement('div');
+  st.className = 'kid-stat';
+  st.textContent = stats.totalEntries === 0
+    ? 'Your jar is waiting!'
+    : `${stats.totalEntries} glow${stats.totalEntries === 1 ? '' : 's'} · 🔥 ${stats.currentStreak}`;
+
+  card.append(av, nm, st);
+  card.addEventListener('click', () => enterJournal(person));
+  return card;
+}
+
+function renderProfiles() {
+  const kidHolder = document.getElementById('kid-cards');
+  kidHolder.textContent = '';
+  for (const kid of KIDS) kidHolder.appendChild(makePersonCard(kid));
+
+  const grownHolder = document.getElementById('grownup-cards');
+  grownHolder.textContent = '';
+  for (const p of PEOPLE.filter(p => !p.kid)) grownHolder.appendChild(makePersonCard(p));
+}
+
+// ---------- journal ----------
+function enterJournal(kid) {
+  currentKid = kid;
+  document.getElementById('who-avatar').textContent = kid.avatar;
+  document.getElementById('who-name').textContent = kid.name;
+  pickPrompt(false);
+  resetCapture();
+  removeFollowUp();
+  renderStats();
+  renderJarFireflies();
+  show('screen-journal');
+  checkNewReactions();
+}
+
+function renderStats(popWhich) {
+  const stats = statsFor(currentKid.id);
+  document.getElementById('streak-num').textContent = stats.currentStreak;
+  document.getElementById('sparks-num').textContent = stats.sparks;
+  const wishChip = document.getElementById('chip-wish');
+  wishChip.style.display = stats.wishes > 0 ? 'flex' : 'none';
+  document.getElementById('wish-num').textContent = stats.wishes;
+  if (stats.wishUsedNow) {
+    syncAfterChange();
+    toast('🪄 A Wonder Wish saved your streak!');
+  }
+  if (popWhich) {
+    const chip = document.getElementById('chip-' + popWhich);
+    chip.classList.remove('pop');
+    void chip.offsetWidth;
+    chip.classList.add('pop');
+  }
+}
+
+function pickPrompt(shuffle) {
+  if (shuffle) {
+    let next = currentPrompt;
+    while (next === currentPrompt) next = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
+    currentPrompt = next;
+  } else {
+    // stable prompt per kid per day
+    const seedStr = AZ.today() + currentKid.id;
+    let h = 0;
+    for (const ch of seedStr) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    currentPrompt = PROMPTS[h % PROMPTS.length];
+  }
+  document.getElementById('prompt-text').textContent = currentPrompt;
+}
+
+function renderJarFireflies() {
+  const holder = document.getElementById('fireflies');
+  holder.textContent = '';
+  const entries = entriesFor(currentKid.id);
+  const count = Math.min(entries.length, 24);
+  for (let i = 0; i < count; i++) addFireflyDot(holder);
+  const todayCount = entries.filter(e => e.date === AZ.today()).length;
+  document.getElementById('jar-count').textContent =
+    entries.length === 0 ? 'An empty jar is full of room for wonder…'
+    : `${entries.length} glowing thought${entries.length === 1 ? '' : 's'}` + (todayCount ? ` · ${todayCount} today!` : '');
+}
+
+function addFireflyDot(holder) {
+  const f = document.createElement('div');
+  f.className = 'firefly';
+  f.style.left = (8 + Math.random() * 80) + '%';
+  f.style.top = (25 + Math.random() * 65) + '%';
+  f.style.setProperty('--dx', (Math.random() * 44 - 22) + 'px');
+  f.style.setProperty('--dy', (Math.random() * 44 - 22) + 'px');
+  f.style.animationDelay = (Math.random() * 3) + 's';
+  f.style.animationDuration = (4 + Math.random() * 4) + 's, 2.4s';
+  const scale = .7 + Math.random() * .7;
+  f.style.width = f.style.height = (10 * scale) + 'px';
+  holder.appendChild(f);
+}
+
+// ---------- jar tap → memory ----------
+let memoryTimer = null;
+document.getElementById('jar-wrap').addEventListener('click', () => {
+  const entries = entriesFor(currentKid.id);
+  if (!entries.length) return;
+  const pick = entries[Math.floor(Math.random() * entries.length)];
+  const bubble = document.getElementById('memory-bubble');
+  bubble.textContent = '';
+  const txt = document.createElement('span');
+  txt.textContent = '“' + pick.text + '”';
+  const dt = document.createElement('span');
+  dt.className = 'mem-date';
+  dt.textContent = '— ' + currentKid.name + ', ' + AZ.pretty(pick.date);
+  bubble.append(txt, dt);
+  bubble.classList.add('show');
+  clearTimeout(memoryTimer);
+  memoryTimer = setTimeout(() => bubble.classList.remove('show'), 4000);
+});
+
+// ---------- voice capture ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = document.getElementById('mic-btn');
+const micHint = document.getElementById('mic-hint');
+const transcriptZone = document.getElementById('transcript-zone');
+const transcriptBox = document.getElementById('transcript-box');
+
+function showTranscript() {
+  transcriptZone.classList.add('show');
+  document.getElementById('mic-wrap').style.display = 'none';
+  document.getElementById('type-link').style.display = 'none';
+}
+function hideTranscript() {
+  transcriptZone.classList.remove('show');
+  document.getElementById('mic-wrap').style.display = 'flex';
+  document.getElementById('type-link').style.display = 'flex';
+}
+
+function resetCapture() {
+  stopListening();
+  hideTranscript();
+  transcriptBox.value = '';
+  micHint.textContent = SR ? 'Tap the mic and tell me!' : 'Tap to type your happy thought!';
+}
+
+function startListening() {
+  if (!SR) { showTyping(); return; }
+  try {
+    recognition = new SR();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.addEventListener('result', (e) => {
+      let text = '';
+      for (const res of e.results) text += res[0].transcript;
+      transcriptBox.value = text;
+      transcriptZone.classList.add('show');
+    });
+    recognition.addEventListener('end', () => {
+      recognizing = false;
+      micBtn.classList.remove('listening');
+      document.querySelectorAll('.ring').forEach(r => r.remove());
+      if (transcriptBox.value.trim()) {
+        micHint.textContent = 'Did I hear that right? You can fix it!';
+        showTranscript();
+      } else {
+        micHint.textContent = "Hmm, I didn't catch it — try again!";
+      }
+    });
+    recognition.addEventListener('error', () => {
+      recognizing = false;
+      micBtn.classList.remove('listening');
+      document.querySelectorAll('.ring').forEach(r => r.remove());
+      micHint.textContent = 'Mic trouble — you can type it instead!';
+      showTyping();
+    });
+
+    recognition.start();
+    recognizing = true;
+    micBtn.classList.add('listening');
+    micHint.textContent = "I'm listening… 👂";
+    for (let i = 0; i < 2; i++) {
+      const ring = document.createElement('div');
+      ring.className = 'ring';
+      ring.style.animationDelay = (i * 0.5) + 's';
+      document.getElementById('mic-wrap').appendChild(ring);
+    }
+  } catch (e) {
+    showTyping();
+  }
+}
+
+function stopListening() {
+  if (recognition && recognizing) { try { recognition.stop(); } catch (e) {} }
+  recognizing = false;
+  micBtn.classList.remove('listening');
+  document.querySelectorAll('.ring').forEach(r => r.remove());
+}
+
+function showTyping() {
+  stopListening();
+  showTranscript();
+  transcriptBox.focus();
+}
+
+micBtn.addEventListener('click', () => {
+  if (recognizing) stopListening();
+  else startListening();
+});
+document.getElementById('type-link').addEventListener('click', showTyping);
+document.getElementById('redo-btn').addEventListener('click', () => {
+  transcriptBox.value = '';
+  hideTranscript();
+  startListening();
+});
+
+// ---------- save entry ----------
+// celebration queue: reveals (glimmer, badge, reaction) show one at a time
+const celebQ = [];
+function queueCeleb(fn) { celebQ.push(fn); }
+function nextCeleb() { const fn = celebQ.shift(); if (fn) fn(); }
+
+let pendingAppend = null; // entry id being extended via a follow-up question
+let editingEntry = null;  // entry id being edited from the Thoughts list
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  const text = transcriptBox.value.trim();
+  if (!text) { toast('Say or type something first! 💛'); return; }
+  stopListening();
+
+  if (editingEntry && data.records[editingEntry]) {
+    const rec = data.records[editingEntry];
+    rec.text = text;
+    rec.updatedAt = Date.now();
+    editingEntry = null;
+    syncAfterChange();
+    hideTranscript();
+    transcriptBox.value = '';
+    micHint.textContent = SR ? 'Tap the mic and tell me!' : 'Tap to type your happy thought!';
+    toast('Updated! ✨');
+    renderJarFireflies();
+    return;
+  }
+
+  let entryId;
+  let isNew = false;
+  if (pendingAppend && data.records[pendingAppend]) {
+    entryId = pendingAppend;
+    const rec = data.records[entryId];
+    rec.text = rec.text + ' ' + text;
+    rec.updatedAt = Date.now();
+    pendingAppend = null;
+  } else {
+    isNew = true;
+    entryId = 'entry_' + uid();
+    data.records[entryId] = {
+      id: entryId, type: 'entry', kidId: currentKid.id,
+      text, prompt: currentPrompt,
+      date: AZ.today(), updatedAt: Date.now()
+    };
+  }
+  syncAfterChange();
+
+  flyFireflyToJar(() => {
+    renderJarFireflies();
+    renderStats('sparks');
+    if (isNew) {
+      const found = maybeDiscover();
+      if (found) queueCeleb(() => revealGlimmer(found));
+      for (const b of evaluateBadges(currentKid.id)) queueCeleb(() => revealBadge(b));
+      syncAfterChange();
+      queueCeleb(() => { maybeFollowUp(entryId); });
+      nextCeleb();
+    }
+  });
+
+  hideTranscript();
+  transcriptBox.value = '';
+  removeFollowUp();
+  micHint.textContent = 'Beautiful! ✨';
+  setTimeout(() => { micHint.textContent = SR ? 'Tap the mic to add another!' : 'Tap to type another!'; }, 2500);
+});
+
+function flyFireflyToJar(done) {
+  const from = micBtn.getBoundingClientRect();
+  const to = document.getElementById('jar-wrap').getBoundingClientRect();
+  const f = document.createElement('div');
+  f.className = 'fly-firefly';
+  f.style.left = (from.left + from.width / 2 - 8) + 'px';
+  f.style.top = (from.top + from.height / 2 - 8) + 'px';
+  document.body.appendChild(f);
+  requestAnimationFrame(() => {
+    const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+    const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+    f.style.transform = `translate(${dx}px, ${dy}px) scale(.6)`;
+    f.style.opacity = '0';
+  });
+  setTimeout(() => { f.remove(); if (done) done(); }, 1000);
+}
+
+// ---------- discovery ----------
+function maybeDiscover() {
+  const owned = glimmersFor(currentKid.id);
+  const firstEver = entriesFor(currentKid.id).length === 1;
+  if (!firstEver && Math.random() > DISCOVERY_CHANCE) return null;
+
+  const pool = GLIMMERS.filter(g => !owned.has(g.id));
+  if (!pool.length) return null;
+
+  // weighted pick: legendary is rarer
+  const weights = { common: 6, rare: 3, legendary: 1 };
+  const bag = [];
+  for (const g of pool) for (let i = 0; i < weights[g.rarity]; i++) bag.push(g);
+  const found = bag[Math.floor(Math.random() * bag.length)];
+
+  const key = `glimmer_${currentKid.id}_${found.id}`;
+  data.records[key] = {
+    id: key, type: 'glimmer', kidId: currentKid.id,
+    glimmerId: found.id, earnedAt: AZ.today(), updatedAt: Date.now()
+  };
+  return found;
+}
+
+function revealGlimmer(g) {
+  confettiBurst(g.rarity === 'legendary' ? 80 : 40);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box reveal-box';
+
+  const burst = document.createElement('div');
+  burst.className = 'reveal-burst';
+  burst.textContent = '✨🎉✨';
+
+  const em = document.createElement('span');
+  em.className = 'reveal-emoji';
+  em.textContent = g.emoji;
+
+  const rar = document.createElement('div');
+  rar.className = 'reveal-rarity rarity-' + g.rarity;
+  rar.textContent = RARITY_LABEL[g.rarity];
+
+  const nm = document.createElement('div');
+  nm.className = 'reveal-name';
+  nm.textContent = g.name;
+
+  const line = document.createElement('div');
+  line.className = 'reveal-line';
+  line.textContent = '“' + g.line + '”';
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'Add to my collection! 🎒';
+  ok.addEventListener('click', () => { overlay.remove(); renderStats('sparks'); nextCeleb(); });
+  btnRow.appendChild(ok);
+
+  box.append(burst, em, rar, nm, line, btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+function revealBadge(b) {
+  confettiBurst(40);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box reveal-box';
+
+  const burst = document.createElement('div');
+  burst.className = 'reveal-burst';
+  burst.textContent = '🎉🏅🎉';
+
+  const em = document.createElement('span');
+  em.className = 'reveal-emoji';
+  em.textContent = b.emoji;
+
+  const rar = document.createElement('div');
+  rar.className = 'reveal-rarity rarity-rare';
+  rar.textContent = 'NEW BADGE!';
+
+  const nm = document.createElement('div');
+  nm.className = 'reveal-name';
+  nm.textContent = b.name;
+
+  const line = document.createElement('div');
+  line.className = 'reveal-line';
+  line.textContent = b.desc + ' · +20 sparks!';
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'Amazing! 🌟';
+  ok.addEventListener('click', () => { overlay.remove(); renderStats('sparks'); nextCeleb(); });
+  btnRow.appendChild(ok);
+
+  box.append(burst, em, rar, nm, line, btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+// ---------- treasures modal (Glimmers / Badges / Thoughts / Family) ----------
+function renderGlimmerTab(content) {
+  content.textContent = '';
+  const owned = glimmersFor(currentKid.id);
+  const p = document.createElement('p');
+  p.textContent = owned.size + ' of ' + GLIMMERS.length + ' discovered — keep filling your jar to find them all!';
+  const grid = document.createElement('div');
+  grid.id = 'collection-grid';
+  for (const g of GLIMMERS) {
+    const cell = document.createElement('div');
+    cell.className = 'glimmer-cell' + (owned.has(g.id) ? '' : ' locked');
+    const em = document.createElement('div');
+    em.className = 'g-emoji';
+    em.textContent = owned.has(g.id) ? g.emoji : '❓';
+    const nm = document.createElement('div');
+    nm.className = 'g-name';
+    nm.textContent = owned.has(g.id) ? g.name : '???';
+    cell.append(em, nm);
+    grid.appendChild(cell);
+  }
+  content.append(p, grid);
+}
+
+function renderBadgeTab(content) {
+  content.textContent = '';
+  const owned = badgesFor(currentKid.id);
+  const p = document.createElement('p');
+  p.textContent = owned.size + ' of ' + BADGES.length + ' badges earned!';
+  const grid = document.createElement('div');
+  grid.id = 'collection-grid';
+  for (const b of BADGES) {
+    const cell = document.createElement('div');
+    cell.className = 'glimmer-cell' + (owned.has(b.id) ? '' : ' locked');
+    const em = document.createElement('div');
+    em.className = 'g-emoji';
+    em.textContent = b.emoji;
+    const nm = document.createElement('div');
+    nm.className = 'g-name';
+    nm.textContent = b.name;
+    const de = document.createElement('div');
+    de.className = 'g-desc';
+    de.textContent = b.desc;
+    cell.append(em, nm, de);
+    grid.appendChild(cell);
+  }
+  content.append(p, grid);
+}
+
+function reactionsForEntry(entryId) {
+  return Object.values(data.records).filter(r => r.type === 'reaction' && r.entryId === entryId && !r.deleted);
+}
+
+function heartsLabel(entry) {
+  const hearts = reactionsForEntry(entry.id);
+  return hearts.map(h => '❤️ ' + personName(h.from) + (h.note ? ' — “' + h.note + '”' : '')).join('  ');
+}
+
+function makeEntryRow(entry, { own, onChanged }) {
+  const row = document.createElement('div');
+  row.className = 'entry-row';
+  const txt = document.createElement('div');
+  txt.className = 'entry-text';
+  txt.textContent = '“' + entry.text + '”';
+  const meta = document.createElement('div');
+  meta.className = 'entry-meta';
+  meta.textContent = (own ? '' : personName(entry.kidId) + ' · ') + AZ.pretty(entry.date)
+    + (heartsLabel(entry) ? '   ' + heartsLabel(entry) : '');
+  const actions = document.createElement('div');
+  actions.className = 'entry-actions';
+
+  if (own) {
+    const edit = document.createElement('button');
+    edit.textContent = '✏️ Fix it';
+    edit.addEventListener('click', () => {
+      document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+      editingEntry = entry.id;
+      showTranscript();
+      transcriptBox.value = entry.text;
+      transcriptBox.focus();
+      micHint.textContent = 'Fix your thought, then drop it back in!';
+    });
+    const del = document.createElement('button');
+    del.textContent = '🗑️';
+    del.addEventListener('click', () => {
+      showModal({
+        title: 'Let this thought go?',
+        message: 'It will float out of the jar forever.',
+        confirmText: 'Let it go', cancelText: 'Keep it',
+        onConfirm: () => {
+          data.records[entry.id] = { ...entry, deleted: true, updatedAt: Date.now() };
+          syncAfterChange();
+          renderJarFireflies();
+          onChanged();
+        }
+      });
+    });
+    actions.append(edit, del);
+  } else {
+    const hearted = reactionsForEntry(entry.id).some(r => r.from === currentKid.id);
+    const heart = document.createElement('button');
+    heart.className = 'heart-btn' + (hearted ? ' hearted' : '');
+    heart.textContent = hearted ? '❤️ Loved' : '🤍 Love it';
+    heart.addEventListener('click', () => {
+      const key = `react_${entry.id}_${currentKid.id}`;
+      const existing = data.records[key];
+      if (existing && !existing.deleted) {
+        data.records[key] = { ...existing, deleted: true, updatedAt: Date.now() };
+      } else {
+        data.records[key] = {
+          id: key, type: 'reaction', entryId: entry.id, kidId: entry.kidId,
+          from: currentKid.id, note: (existing && existing.note) || '', updatedAt: Date.now()
+        };
+      }
+      syncAfterChange();
+      onChanged();
+    });
+    const note = document.createElement('button');
+    note.textContent = '📝 Note';
+    note.addEventListener('click', () => {
+      const key = `react_${entry.id}_${currentKid.id}`;
+      const existing = data.records[key];
+      showInputModal({
+        title: 'Leave a little note 💛',
+        placeholder: 'They will discover it next time…',
+        value: (existing && !existing.deleted && existing.note) || '',
+        onSave: (val) => {
+          data.records[key] = {
+            id: key, type: 'reaction', entryId: entry.id, kidId: entry.kidId,
+            from: currentKid.id, note: val, updatedAt: Date.now()
+          };
+          syncAfterChange();
+          onChanged();
+        }
+      });
+    });
+    actions.append(heart, note);
+  }
+
+  row.append(txt, meta, actions);
+  return row;
+}
+
+function renderThoughtsTab(content) {
+  content.textContent = '';
+  const magic = document.createElement('button');
+  magic.className = 'btn-small';
+  magic.style.width = '100%';
+  magic.style.marginBottom = '10px';
+  magic.textContent = '🔮 My Week of Wonder';
+  magic.addEventListener('click', () => generateInsights('kid'));
+  content.appendChild(magic);
+
+  const entries = entriesFor(currentKid.id);
+  if (!entries.length) {
+    const p = document.createElement('p');
+    p.textContent = 'No thoughts yet — tap the mic and add your first!';
+    content.appendChild(p);
+    return;
+  }
+  for (const e of entries.slice(0, 60)) {
+    content.appendChild(makeEntryRow(e, { own: true, onChanged: () => renderThoughtsTab(content) }));
+  }
+}
+
+function renderFamilyTab(content) {
+  content.textContent = '';
+  const report = document.createElement('button');
+  report.className = 'btn-small';
+  report.style.width = '100%';
+  report.style.marginBottom = '10px';
+  report.textContent = '🔮 Wonder Report for parents';
+  report.addEventListener('click', () => generateInsights('parent'));
+  content.appendChild(report);
+
+  const entries = Object.values(data.records)
+    .filter(r => r.type === 'entry' && !r.deleted && r.kidId !== currentKid.id)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  if (!entries.length) {
+    const p = document.createElement('p');
+    p.textContent = 'No family thoughts yet — the jars are waiting!';
+    content.appendChild(p);
+    return;
+  }
+  for (const e of entries.slice(0, 60)) {
+    content.appendChild(makeEntryRow(e, { own: false, onChanged: () => renderFamilyTab(content) }));
+  }
+}
+
+document.getElementById('collection-btn').addEventListener('click', () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box stuff-box';
+
+  const h = document.createElement('h3');
+  h.textContent = currentKid.name + "'s treasures";
+
+  const tabRow = document.createElement('div');
+  tabRow.className = 'tab-row';
+  const content = document.createElement('div');
+  content.id = 'tab-content';
+
+  const tabs = [
+    { label: '✨', render: renderGlimmerTab },
+    { label: '🏅', render: renderBadgeTab },
+    { label: '📖', render: renderThoughtsTab }
+  ];
+  if (!currentKid.kid) tabs.push({ label: '👨‍👩‍👧‍👦', render: renderFamilyTab });
+
+  const btns = tabs.map((t) => {
+    const b = document.createElement('button');
+    b.className = 'tab-btn';
+    b.textContent = t.label;
+    b.addEventListener('click', () => {
+      btns.forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      t.render(content);
+    });
+    tabRow.appendChild(b);
+    return b;
+  });
+  btns[0].classList.add('active');
+  tabs[0].render(content);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'Back to my jar';
+  ok.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(ok);
+
+  box.append(h, tabRow, content, btnRow);
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+});
+
+// ---------- confetti + toast ----------
+function confettiBurst(n) {
+  const colors = ['#ffd66b', '#f5a9d0', '#7be0d6', '#b8a9f5', '#fff'];
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + 'vw';
+    c.style.top = '-12px';
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.setProperty('--cx', (Math.random() * 120 - 60) + 'px');
+    c.style.setProperty('--t', (1.2 + Math.random() * 1.2) + 's');
+    c.style.borderRadius = Math.random() < .5 ? '50%' : '2px';
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 2600);
+  }
+}
+
+let toastEl = null;
+function toast(msg) {
+  if (toastEl) toastEl.remove();
+  toastEl = document.createElement('div');
+  toastEl.className = 'toast';
+  toastEl.textContent = msg;
+  document.body.appendChild(toastEl);
+  setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 2600);
+}
+
+// ---------- custom modals (canonical — no alert/confirm/prompt) ----------
+function showModal({ title, message, confirmText = 'OK', cancelText = null, onConfirm = null }) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h = document.createElement('h3');
+  h.textContent = title;
+  const p = document.createElement('p');
+  p.textContent = message;
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+
+  if (cancelText) {
+    const cancel = document.createElement('button');
+    cancel.textContent = cancelText;
+    cancel.className = 'btn-secondary';
+    cancel.addEventListener('click', () => overlay.remove());
+    btnRow.appendChild(cancel);
+  }
+  const ok = document.createElement('button');
+  ok.textContent = confirmText;
+  ok.className = 'btn-primary';
+  ok.addEventListener('click', () => { overlay.remove(); if (onConfirm) onConfirm(); });
+  btnRow.appendChild(ok);
+
+  box.append(h, p, btnRow);
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+function showInputModal({ title, placeholder = '', value = '', onSave }) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h = document.createElement('h3');
+  h.textContent = title;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'text-input';
+  input.placeholder = placeholder;
+  input.value = value;
+  input.style.marginTop = '12px';
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.className = 'btn-secondary';
+  cancel.addEventListener('click', () => overlay.remove());
+  const ok = document.createElement('button');
+  ok.textContent = 'Save 💛';
+  ok.className = 'btn-primary';
+  ok.addEventListener('click', () => { overlay.remove(); onSave(input.value.trim()); });
+  btnRow.append(cancel, ok);
+
+  box.append(h, input, btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  setTimeout(() => input.focus(), 50);
+}
+
+// ---------- kid discovers parent hearts ----------
+function revealReaction(reaction, entry) {
+  confettiBurst(30);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box reveal-box';
+
+  const em = document.createElement('span');
+  em.className = 'reaction-heart';
+  em.textContent = '❤️';
+
+  const nm = document.createElement('div');
+  nm.className = 'reveal-name';
+  nm.textContent = personName(reaction.from) + ' loved this thought!';
+
+  const quote = document.createElement('div');
+  quote.className = 'reaction-quote';
+  quote.textContent = '“' + entry.text + '”';
+
+  box.append(em, nm, quote);
+
+  if (reaction.note) {
+    const note = document.createElement('div');
+    note.className = 'reaction-note';
+    note.textContent = '“' + reaction.note + '” — ' + personName(reaction.from);
+    box.appendChild(note);
+  }
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'Aww! 💛';
+  ok.addEventListener('click', () => { overlay.remove(); nextCeleb(); });
+  btnRow.appendChild(ok);
+  box.appendChild(btnRow);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+function checkNewReactions() {
+  const seenKey = 'seen_reactions_' + currentKid.id;
+  const seen = new Set(Store.get(seenKey, []));
+  const mine = Object.values(data.records).filter(r =>
+    r.type === 'reaction' && !r.deleted && r.kidId === currentKid.id &&
+    r.from !== currentKid.id && !seen.has(r.id));
+  if (!mine.length) return;
+  for (const r of mine) {
+    const entry = data.records[r.entryId];
+    if (!entry || entry.deleted) continue;
+    queueCeleb(() => revealReaction(r, entry));
+  }
+  Store.set(seenKey, [...seen, ...mine.map(r => r.id)]);
+  nextCeleb();
+}
+
+// ---------- Claude follow-up (optional; app fully works without a key) ----------
+async function askClaude(prompt, { system = null, maxTokens = 200 } = {}) {
+  const key = Store.get('anthropic_key');
+  if (!key) throw new Error('NO_KEY');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: maxTokens,
+      ...(system ? { system } : {}),
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!res.ok) throw new Error('Claude API error: ' + res.status);
+  const d = await res.json();
+  return d.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+}
+
+function removeFollowUp() {
+  const c = document.getElementById('followup-card');
+  if (c) c.remove();
+}
+
+function showFollowUpCard(guide, question, entryId) {
+  removeFollowUp();
+  const card = document.createElement('div');
+  card.id = 'followup-card';
+  const who = document.createElement('div');
+  who.className = 'fu-who';
+  who.textContent = guide.emoji + ' ' + guide.name + ' wonders…';
+  const q = document.createElement('div');
+  q.className = 'fu-q';
+  q.textContent = question;
+  const row = document.createElement('div');
+  row.className = 'capture-actions';
+  row.style.marginTop = '10px';
+  const done = document.createElement('button');
+  done.className = 'btn-big btn-redo';
+  done.textContent = 'All done ✨';
+  done.addEventListener('click', removeFollowUp);
+  const more = document.createElement('button');
+  more.className = 'btn-big btn-save';
+  more.textContent = SR ? '🎤 Tell more!' : '✏️ Tell more!';
+  more.addEventListener('click', () => {
+    pendingAppend = entryId;
+    removeFollowUp();
+    if (SR) startListening(); else showTyping();
+  });
+  row.append(done, more);
+  card.append(who, q, row);
+  document.getElementById('capture-zone').prepend(card);
+}
+
+async function maybeFollowUp(entryId) {
+  if (!Store.get('anthropic_key')) return;
+  const rec = data.records[entryId];
+  if (!rec || rec.deleted) return;
+  const owned = [...glimmersFor(currentKid.id)];
+  const guideId = owned[Math.floor(Math.random() * owned.length)];
+  const guide = GLIMMERS.find(g => g.id === guideId) || GLIMMERS[0];
+  try {
+    const q = await askClaude(
+      'A child named ' + currentKid.name + ' just wrote this in their gratitude journal (the prompt was "' + rec.prompt + '"): "' + rec.text + '". ' +
+      'Reply with exactly ONE warm, curious follow-up question, under 15 words, that helps them savor the moment a little more. Reply with only the question.',
+      {
+        system: 'You are a gentle, playful creature living in a children\'s gratitude journal app. Ask simple, warm questions a young child can answer out loud. Never give advice, never be negative, never ask about anything scary or sad.',
+        maxTokens: 60
+      }
+    );
+    const clean = (q || '').trim().replace(/^["“]|["”]$/g, '');
+    if (clean && document.getElementById('screen-journal').classList.contains('active')) {
+      showFollowUpCard(guide, clean, entryId);
+    }
+  } catch (e) { /* no key / offline / error — stay silent, app works without AI */ }
+}
+
+// ---------- AI insights (Wonder Report / My Week of Wonder) ----------
+function showTextModal(title, initialText) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box settings-box';
+
+  const h = document.createElement('h3');
+  h.textContent = title;
+  const body = document.createElement('div');
+  body.style.marginTop = '12px';
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'Done ✨';
+  ok.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(ok);
+
+  box.append(h, body, btnRow);
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  const setText = (text) => {
+    body.textContent = '';
+    for (const para of String(text).split(/\n+/)) {
+      if (!para.trim()) continue;
+      const p = document.createElement('p');
+      p.style.marginTop = '10px';
+      p.style.lineHeight = '1.5';
+      p.textContent = para.trim();
+      body.appendChild(p);
+    }
+  };
+  setText(initialText);
+  return { setText, overlay };
+}
+
+async function generateInsights(kind) {
+  if (!Store.get('anthropic_key')) {
+    toast('Add the Anthropic key in ⚙️ Grown-up stuff first');
+    return;
+  }
+
+  let system, prompt, title;
+  if (kind === 'parent') {
+    title = '🔮 Wonder Report';
+    const cutoff = addDays(AZ.today(), -30);
+    const lines = [];
+    for (const person of KIDS) {
+      const es = entriesFor(person.id).filter(e => e.date >= cutoff);
+      const s = statsFor(person.id);
+      lines.push(person.name + ' — current streak ' + s.currentStreak + ', ' + s.totalEntries + ' entries ever, ' + es.length + ' in the last 30 days:');
+      for (const e of es.slice(0, 40)) lines.push('  [' + e.date + '] ' + e.text);
+      lines.push('');
+    }
+    system = 'You help parents gently understand their children\'s gratitude journals. Be warm, specific, and brief. Celebrate; never diagnose or alarm. If something seems worth a caring conversation, suggest it softly. Plain text only, no markdown.';
+    prompt = 'Here are our kids\' gratitude journal entries from the last 30 days:\n\n' + lines.join('\n') +
+      '\nWrite a short report for us parents (under 220 words): for each child, what their jar has been glowing about (themes), one moment worth celebrating together as a family, and one gentle dinner-table conversation starter. Comment briefly on streaks. Address us as "you".';
+  } else {
+    title = '🔮 My Week of Wonder';
+    const cutoff = addDays(AZ.today(), -7);
+    const es = entriesFor(currentKid.id).filter(e => e.date >= cutoff);
+    if (!es.length) { toast('Fill your jar this week first! 🫙'); return; }
+    const s = statsFor(currentKid.id);
+    system = 'You are a magical, kind creature who lives in a child\'s gratitude jar. Speak directly to the child in simple, joyful words a young reader understands. Under 80 words. Plain text, a couple of emoji are okay. Only celebrate — never criticize.';
+    prompt = 'Here is what ' + currentKid.name + ' put in their gratitude jar this week (their streak is ' + s.currentStreak + ' nights):\n' +
+      es.map(e => '- ' + e.text).join('\n') +
+      '\n\nTell ' + currentKid.name + ' what their jar glowed about this week, cheer for their streak, and end with one tiny wonder-question to think about tomorrow.';
+  }
+
+  const modal = showTextModal(title, 'Reading the jar by starlight… ✨');
+  try {
+    const out = await askClaude(prompt, { system, maxTokens: 600 });
+    modal.setText(out.trim() || 'The stars are quiet tonight — try again soon. 🌥️');
+  } catch (e) {
+    modal.setText('The stars are cloudy right now — check the key in Grown-up stuff, or try again in a bit. 🌥️');
+  }
+}
+
+// ---------- family sky ----------
+function openSky() {
+  const total = Object.values(data.records).filter(r => r.type === 'entry' && !r.deleted).length;
+  const holder = document.getElementById('sky-stars');
+  holder.textContent = '';
+  const n = Math.min(total, 300);
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('div');
+    s.className = 'sky-star';
+    const fx = (Math.sin((i + 1) * 127.1) * 43758.5453) % 1;
+    const fy = (Math.sin((i + 1) * 311.7) * 12543.123) % 1;
+    s.style.left = (Math.abs(fx) * 94 + 3) + '%';
+    s.style.top = (Math.abs(fy) * 90 + 5) + '%';
+    const size = 3 + ((i * 7) % 5);
+    s.style.width = s.style.height = size + 'px';
+    s.style.animationDelay = ((i % 9) / 3) + 's';
+    holder.appendChild(s);
+  }
+  document.getElementById('sky-count').textContent = total === 0
+    ? 'Every thought anyone drops in a jar becomes a star here ✨'
+    : total + ' star' + (total === 1 ? '' : 's') + ' in our family sky';
+
+  const next = MILESTONES.find(m => total < m.at);
+  const prevAt = [...MILESTONES].reverse().find(m => total >= m.at);
+  const from = prevAt ? prevAt.at : 0;
+  const pct = next ? Math.min(100, Math.max(3, ((total - from) / (next.at - from)) * 100)) : 100;
+  document.getElementById('sky-progress').style.width = pct + '%';
+  document.getElementById('sky-progress-label').textContent = next
+    ? (next.at - total) + ' more star' + (next.at - total === 1 ? '' : 's') + ' to unlock: ' + next.emoji + ' ' + next.name
+    : 'Every reward unlocked — legendary family! 🏆';
+
+  const list = document.getElementById('rewards-list');
+  list.textContent = '';
+  for (const m of MILESTONES) {
+    const row = document.createElement('div');
+    row.className = 'reward-row' + (total < m.at ? ' locked' : '');
+    const em = document.createElement('div');
+    em.className = 'reward-emoji';
+    em.textContent = m.emoji;
+    const info = document.createElement('div');
+    info.className = 'reward-info';
+    const nm = document.createElement('div');
+    nm.className = 'reward-name';
+    nm.textContent = m.name;
+    const at = document.createElement('div');
+    at.className = 'reward-at';
+    at.textContent = m.at + ' family stars';
+    info.append(nm, at);
+    row.append(em, info);
+
+    const claimedRec = data.records['reward_' + m.at];
+    if (total >= m.at) {
+      if (claimedRec && !claimedRec.deleted) {
+        const done = document.createElement('div');
+        done.className = 'reward-claimed';
+        done.textContent = '✓ ' + AZ.pretty(claimedRec.claimedAt);
+        row.appendChild(done);
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'reward-claim';
+        btn.textContent = 'Claim! 🎉';
+        btn.addEventListener('click', () => {
+          data.records['reward_' + m.at] = {
+            id: 'reward_' + m.at, type: 'reward', at: m.at,
+            claimedAt: AZ.today(), updatedAt: Date.now()
+          };
+          syncAfterChange();
+          confettiBurst(60);
+          openSky();
+        });
+        row.appendChild(btn);
+      }
+    }
+    list.appendChild(row);
+  }
+  show('screen-sky');
+}
+
+// ---------- keepsake book (print / save as PDF) ----------
+function printKeepsake(personId) {
+  const entries = Object.values(data.records)
+    .filter(r => r.type === 'entry' && !r.deleted && (personId === 'all' || r.kidId === personId))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.updatedAt - b.updatedAt));
+  if (!entries.length) { toast('No thoughts to print yet!'); return; }
+
+  const book = document.getElementById('print-book');
+  book.textContent = '';
+  const h1 = document.createElement('h1');
+  h1.textContent = personId === 'all' ? 'The Ortiz Family Wonder Jar' : personName(personId) + "'s Wonder Jar";
+  const sub = document.createElement('div');
+  sub.className = 'pb-sub';
+  sub.textContent = 'A jar full of glowing thoughts · printed ' + AZ.pretty(AZ.today());
+  book.append(h1, sub);
+
+  let curMonth = '';
+  for (const e of entries) {
+    const [y, m] = e.date.split('-').map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    if (label !== curMonth) {
+      curMonth = label;
+      const h2 = document.createElement('h2');
+      h2.textContent = label;
+      book.appendChild(h2);
+    }
+    const div = document.createElement('div');
+    div.className = 'pb-entry';
+    const t = document.createElement('div');
+    t.className = 'pb-text';
+    t.textContent = '“' + e.text + '”';
+    const meta = document.createElement('div');
+    meta.className = 'pb-meta';
+    const hearts = reactionsForEntry(e.id);
+    meta.textContent = '— ' + personName(e.kidId) + ', ' + AZ.pretty(e.date)
+      + (hearts.length ? '   ' + hearts.map(h => '♥ ' + personName(h.from) + (h.note ? ': “' + h.note + '”' : '')).join('   ') : '');
+    div.append(t, meta);
+    book.appendChild(div);
+  }
+  window.print();
+}
+
+// ---------- backup export / import ----------
+function downloadBackup() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'wonder-jar-backup-' + AZ.today() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('Backup downloaded 💾');
+}
+
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed || typeof parsed.records !== 'object') throw new Error('bad shape');
+      data = Sync.merge(data, parsed); // safe merge — newest record wins, nothing clobbered
+      syncAfterChange();
+      renderProfiles();
+      toast('Backup restored! ✨');
+    } catch (e) {
+      toast('That file doesn\'t look like a Wonder Jar backup 🤔');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ---------- reminders (PWA periodic background sync) ----------
+async function enableReminders() {
+  if (!('serviceWorker' in navigator) || !('Notification' in window)) {
+    toast('Not supported in this browser');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { toast('Notifications were not allowed 🙈'); return; }
+  const reg = await navigator.serviceWorker.ready;
+  if ('periodicSync' in reg) {
+    try {
+      await reg.periodicSync.register('jar-reminder', { minInterval: 12 * 60 * 60 * 1000 });
+      Store.set('reminders', true);
+      toast('Evening reminders are on! 🔔');
+      return;
+    } catch (e) {
+      toast('Install the app to the home screen first, then try again 📲');
+      return;
+    }
+  }
+  toast('This browser can\'t schedule reminders — try a Clock alarm ⏰');
+}
+
+// ---------- settings ----------
+function makeInput(type, placeholder, value) {
+  const i = document.createElement('input');
+  i.type = type;
+  i.className = 'text-input';
+  i.placeholder = placeholder;
+  i.value = value;
+  i.autocomplete = 'off';
+  return i;
+}
+
+function makeSection(parent, title) {
+  const s = document.createElement('div');
+  s.className = 'settings-section';
+  const t = document.createElement('h4');
+  t.textContent = title;
+  s.appendChild(t);
+  parent.appendChild(s);
+  return s;
+}
+
+function makeNote(parent, text) {
+  const n = document.createElement('div');
+  n.className = 'settings-note';
+  n.textContent = text;
+  parent.appendChild(n);
+}
+
+document.getElementById('settings-btn').addEventListener('click', () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box settings-box';
+
+  const h = document.createElement('h3');
+  h.textContent = '⚙️ Grown-up stuff';
+  box.appendChild(h);
+
+  // family sync
+  const sync = makeSection(box, 'Family sync (GitHub Gist)');
+  const tokenIn = makeInput('password', 'GitHub token (ghp_…)', Store.get('gist_token', ''));
+  const gistIn = makeInput('text', 'Gist ID', Store.get('gist_id', ''));
+  const syncBtn = document.createElement('button');
+  syncBtn.className = 'btn-small';
+  syncBtn.textContent = '💾 Save & test sync';
+  syncBtn.addEventListener('click', async () => {
+    Store.set('gist_token', tokenIn.value.trim());
+    Store.set('gist_id', gistIn.value.trim());
+    if (!syncConfigured()) { toast('Sync off — this phone only'); setSyncDot(''); return; }
+    syncBtn.textContent = '⏳ Testing…';
+    try {
+      data = await Sync.save(data);
+      saveLocal();
+      setSyncDot('ok');
+      toast('Sync is working! ✅');
+    } catch (e) {
+      setSyncDot('err');
+      toast('Sync failed — check token & Gist ID');
+    }
+    syncBtn.textContent = '💾 Save & test sync';
+  });
+  sync.append(tokenIn, gistIn, syncBtn);
+  makeNote(sync, 'Keeps everyone\'s jars in sync across all four Pixels. Same token & Gist ID on each phone.');
+
+  // AI
+  const ai = makeSection(box, 'AI magic (optional)');
+  const keyIn = makeInput('password', 'Anthropic API key (sk-ant-…)', Store.get('anthropic_key', ''));
+  const keyBtn = document.createElement('button');
+  keyBtn.className = 'btn-small';
+  keyBtn.textContent = '💾 Save key';
+  keyBtn.addEventListener('click', () => {
+    Store.set('anthropic_key', keyIn.value.trim());
+    toast(keyIn.value.trim() ? 'AI magic on! ✨' : 'AI magic off');
+  });
+  ai.append(keyIn, keyBtn);
+  makeNote(ai, 'A Glimmer asks one gentle follow-up question after each entry. Everything else works without it.');
+
+  // reminders
+  const rem = makeSection(box, 'Reminders');
+  const remBtn = document.createElement('button');
+  remBtn.className = 'btn-small';
+  remBtn.textContent = '🔔 Turn on reminders on this phone';
+  remBtn.addEventListener('click', enableReminders);
+  rem.appendChild(remBtn);
+  makeNote(rem, 'First install the app: Chrome menu → Add to Home screen. Reminders nudge in the evening if a jar is empty that day — Android decides exact timing. For a can\'t-miss reminder, also set a daily Google Clock alarm or Family Bell.');
+
+  // keepsakes & backup
+  const keep = makeSection(box, 'Keepsakes & backup');
+  const whoSel = document.createElement('select');
+  whoSel.className = 'text-input';
+  const optAll = document.createElement('option');
+  optAll.value = 'all';
+  optAll.textContent = '👨‍👩‍👧‍👦 Whole family';
+  whoSel.appendChild(optAll);
+  for (const p of PEOPLE) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.avatar + ' ' + p.name;
+    whoSel.appendChild(o);
+  }
+  const keepRow = document.createElement('div');
+  keepRow.className = 'btn-row';
+  const printBtn = document.createElement('button');
+  printBtn.className = 'btn-small';
+  printBtn.textContent = '📖 Print keepsake book';
+  printBtn.addEventListener('click', () => { overlay.remove(); printKeepsake(whoSel.value); });
+  const dlBtn = document.createElement('button');
+  dlBtn.className = 'btn-small';
+  dlBtn.textContent = '💾 Download backup';
+  dlBtn.addEventListener('click', downloadBackup);
+  const fileIn = document.createElement('input');
+  fileIn.type = 'file';
+  fileIn.accept = 'application/json';
+  fileIn.style.display = 'none';
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) importBackup(fileIn.files[0]); });
+  const restoreBtn = document.createElement('button');
+  restoreBtn.className = 'btn-small';
+  restoreBtn.textContent = '📥 Restore backup';
+  restoreBtn.addEventListener('click', () => fileIn.click());
+  keepRow.append(printBtn, dlBtn, restoreBtn);
+  keep.append(whoSel, keepRow, fileIn);
+  makeNote(keep, 'Keepsake opens the print screen — choose "Save as PDF" to keep it forever.');
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'Done';
+  ok.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(ok);
+  box.appendChild(btnRow);
+
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+});
+
+// ---------- service worker meta (reminder data) ----------
+function updateSWMeta() {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  const last = {};
+  for (const k of KIDS) {
+    const es = entriesFor(k.id);
+    last[k.name] = es.length ? es.map(e => e.date).sort().pop() : '';
+  }
+  try { navigator.serviceWorker.controller.postMessage({ type: 'lastEntryByKid', value: last }); } catch (e) {}
+}
+
+// ---------- nav ----------
+document.getElementById('back-btn').addEventListener('click', () => {
+  stopListening();
+  removeFollowUp();
+  renderProfiles();
+  show('screen-profiles');
+});
+document.getElementById('shuffle-btn').addEventListener('click', () => pickPrompt(true));
+document.getElementById('sky-btn').addEventListener('click', openSky);
+document.getElementById('sky-back').addEventListener('click', () => {
+  renderProfiles();
+  show('screen-profiles');
+});
+
+// ---------- init ----------
+renderProfiles();
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+window.addEventListener('beforeinstallprompt', (e) => e.preventDefault());
+pullAndRender();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pullAndRender();
+});
+setTimeout(updateSWMeta, 1500);
+</script>
+</body>
+</html>

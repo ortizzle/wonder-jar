@@ -1,0 +1,15 @@
+{
+  "name": "Wonder Jar",
+  "short_name": "Wonder Jar",
+  "description": "The Ortiz family gratitude jar — whisper your happy thoughts and watch them glow.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0c2a",
+  "theme_color": "#0b0c2a",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
