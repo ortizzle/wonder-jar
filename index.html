@@ -156,9 +156,9 @@
     background: var(--glow-soft); color: #4a3a10;
     border-radius: 18px; font-size: 15px; font-weight: 700; text-align: center;
     transition: transform .25s cubic-bezier(.34,1.56,.64,1);
-    z-index: 5; pointer-events: none;
+    z-index: 5; pointer-events: none; cursor: pointer;
   }
-  #memory-bubble.show { transform: translateX(-50%) scale(1); }
+  #memory-bubble.show { transform: translateX(-50%) scale(1); pointer-events: auto; }
   #memory-bubble .mem-date { display: block; font-size: 11px; opacity: .7; margin-top: 4px; }
 
   /* ---------- prompt card ---------- */
@@ -420,7 +420,8 @@
   /* ---------- sky screen ---------- */
   #screen-sky { align-items: stretch; }
   #sky-stars { position: relative; height: 46vh; min-height: 260px; flex-shrink: 0; overflow: hidden; }
-  .sky-star { position: absolute; border-radius: 50%; background: var(--glow-soft); box-shadow: 0 0 6px 2px rgba(255,214,107,.35); animation: twinkle 3s ease-in-out infinite; }
+  .sky-star { position: absolute; border-radius: 50%; background: var(--glow-soft); box-shadow: 0 0 6px 2px rgba(255,214,107,.35); animation: twinkle 3s ease-in-out infinite; cursor: pointer; }
+  .sky-star::before { content: ''; position: absolute; inset: -11px; } /* bigger invisible tap target */
   .sky-sub { text-align: center; color: var(--text-dim); font-size: 14px; margin-top: 4px; }
   .progress-track { height: 14px; border-radius: 999px; background: rgba(255,255,255,.1); margin: 14px 0 4px; overflow: hidden; flex-shrink: 0; }
   .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--glow), var(--pink)); transition: width .6s ease; }
@@ -1269,11 +1270,17 @@ function addFireflyDot(holder) {
 
 // ---------- jar tap → memory ----------
 let memoryTimer = null;
+function closeMemoryBubble() {
+  clearTimeout(memoryTimer);
+  document.getElementById('memory-bubble').classList.remove('show');
+}
 document.getElementById('jar-wrap').addEventListener('click', () => {
+  const bubble = document.getElementById('memory-bubble');
+  if (bubble.classList.contains('show')) { closeMemoryBubble(); return; } // tap again to dismiss
+
   const entries = entriesFor(currentKid.id);
   if (!entries.length) return;
   const pick = entries[Math.floor(Math.random() * entries.length)];
-  const bubble = document.getElementById('memory-bubble');
   bubble.textContent = '';
   const txt = document.createElement('span');
   txt.textContent = '“' + pick.text + '”';
@@ -1283,8 +1290,9 @@ document.getElementById('jar-wrap').addEventListener('click', () => {
   bubble.append(txt, dt);
   bubble.classList.add('show');
   clearTimeout(memoryTimer);
-  memoryTimer = setTimeout(() => bubble.classList.remove('show'), 4000);
+  memoryTimer = setTimeout(closeMemoryBubble, 6000);
 });
+document.getElementById('memory-bubble').addEventListener('click', (e) => { e.stopPropagation(); closeMemoryBubble(); });
 
 // ---------- voice capture ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2268,12 +2276,64 @@ function openAdminView() {
 }
 
 // ---------- family sky ----------
+function revealSkyStar(entry) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box reveal-box';
+
+  const person = personById(entry.kidId) || { avatar: '✨' };
+  const av = document.createElement('div');
+  av.style.fontSize = '40px';
+  av.textContent = personAvatar(person);
+  const nm = document.createElement('div');
+  nm.className = 'reveal-name';
+  nm.textContent = personName(entry.kidId);
+
+  const parts = [av, nm];
+  if (entry.prompt) {
+    const q = document.createElement('div');
+    q.className = 'qa-question';
+    q.style.marginTop = '10px';
+    q.textContent = 'Q: ' + entry.prompt;
+    parts.push(q);
+  }
+  const quote = document.createElement('div');
+  quote.className = 'reaction-quote';
+  quote.style.marginTop = '10px';
+  quote.textContent = '“' + entry.text + '”';
+  parts.push(quote);
+  const dt = document.createElement('div');
+  dt.className = 'entry-meta';
+  dt.style.cssText = 'margin-top:8px; text-align:center;';
+  dt.textContent = AZ.pretty(entry.date);
+  parts.push(dt);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const ok = document.createElement('button');
+  ok.className = 'btn-primary';
+  ok.textContent = 'Beautiful ✨';
+  ok.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(ok);
+  parts.push(btnRow);
+
+  box.append(...parts);
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 function openSky() {
-  const total = Object.values(data.records).filter(r => r.type === 'entry' && !r.deleted).length;
+  const entries = Object.values(data.records)
+    .filter(r => r.type === 'entry' && !r.deleted)
+    .sort((a, b) => b.updatedAt - a.updatedAt); // newest first, so recent wonders are always tappable
+  const total = entries.length;
   const holder = document.getElementById('sky-stars');
   holder.textContent = '';
-  const n = Math.min(total, 300);
+  const n = Math.min(total, 400);
   for (let i = 0; i < n; i++) {
+    const entry = entries[i];
     const s = document.createElement('div');
     s.className = 'sky-star';
     const fx = (Math.sin((i + 1) * 127.1) * 43758.5453) % 1;
@@ -2283,6 +2343,7 @@ function openSky() {
     const size = 3 + ((i * 7) % 5);
     s.style.width = s.style.height = size + 'px';
     s.style.animationDelay = ((i % 9) / 3) + 's';
+    s.addEventListener('click', () => revealSkyStar(entry));
     holder.appendChild(s);
   }
   document.getElementById('sky-count').textContent = total === 0
@@ -2347,11 +2408,11 @@ function openSky() {
 
 // ---------- Wonder Flight (hidden Easter-egg mini-game) ----------
 const GAME = {
-  gravity: 0.42, jump: -7.2,
-  shipX: 64, shipSize: 26,
-  obstacleGap: 175, obstacleWidth: 46,
-  obstacleSpeed: 2.6, spawnEvery: 95,
-  sparkleChance: 0.55
+  gravity: 0.26, jump: -5.6,
+  shipX: 64, shipSize: 26, shipHitbox: 15, // hitbox smaller than the visual ship — forgiving near-misses
+  obstacleGap: 260, obstacleWidth: 40,
+  obstacleSpeed: 1.7, spawnEvery: 130,
+  sparkleChance: 0.6
 };
 let gameCanvas = null, gameCtx = null, gameLoopId = null, gameState = null;
 
@@ -2433,10 +2494,10 @@ function gameTick() {
   s.sparkles = s.sparkles.filter(sp => sp.x > -20);
 
   for (const o of s.obstacles) {
-    const withinX = GAME.shipX + GAME.shipSize / 2 > o.x && GAME.shipX - GAME.shipSize / 2 < o.x + GAME.obstacleWidth;
+    const withinX = GAME.shipX + GAME.shipHitbox / 2 > o.x && GAME.shipX - GAME.shipHitbox / 2 < o.x + GAME.obstacleWidth;
     if (withinX) {
-      const hitTop = s.shipY - GAME.shipSize / 2 < o.gapY;
-      const hitBottom = s.shipY + GAME.shipSize / 2 > o.gapY + GAME.obstacleGap;
+      const hitTop = s.shipY - GAME.shipHitbox / 2 < o.gapY;
+      const hitBottom = s.shipY + GAME.shipHitbox / 2 > o.gapY + GAME.obstacleGap;
       if (hitTop || hitBottom) { endGame(); return; }
     }
     if (!o.passed && o.x + GAME.obstacleWidth < GAME.shipX) { o.passed = true; s.score++; }
@@ -2444,11 +2505,11 @@ function gameTick() {
   for (const sp of s.sparkles) {
     if (sp.taken) continue;
     const dx = sp.x - GAME.shipX, dy = sp.y - s.shipY;
-    if (Math.sqrt(dx * dx + dy * dy) < 22) { sp.taken = true; s.score += 3; }
+    if (Math.sqrt(dx * dx + dy * dy) < 26) { sp.taken = true; s.score += 3; }
   }
   s.sparkles = s.sparkles.filter(sp => !sp.taken);
 
-  if (s.shipY - GAME.shipSize / 2 < 0 || s.shipY + GAME.shipSize / 2 > s.h) { endGame(); return; }
+  if (s.shipY - GAME.shipHitbox / 2 < 0 || s.shipY + GAME.shipHitbox / 2 > s.h) { endGame(); return; }
 
   document.getElementById('game-score').textContent = s.score;
   renderGame();
