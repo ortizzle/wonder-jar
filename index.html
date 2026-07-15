@@ -394,19 +394,33 @@
   /* ---------- badge cells ---------- */
   .glimmer-cell .g-desc { font-size: 10px; color: rgba(255,255,255,.35); text-align: center; }
 
+  /* ---------- wonder flight (mini-game) ---------- */
+  #screen-game { align-items: stretch; padding-bottom: 0; }
+  #game-wrap { position: relative; flex: 1; min-height: 0; margin: 8px 0 0; }
+  #game-canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+    touch-action: none; border-radius: 18px;
+    background: radial-gradient(120% 100% at 50% 0%, #171849, #0b0c2a);
+  }
+  #game-overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px; text-align: center;
+    background: rgba(11,12,42,.6); padding: 24px; border-radius: 18px;
+  }
+  #game-overlay.hidden { display: none; }
+  #game-overlay-title { font-family: 'Fredoka'; font-size: 26px; font-weight: 700; color: var(--glow); }
+  #game-overlay-sub { font-size: 15px; color: var(--text-dim); max-width: 280px; line-height: 1.4; }
+  #game-action-btn {
+    min-height: 52px; padding: 0 28px; border-radius: 16px;
+    font-family: 'Fredoka'; font-size: 17px; font-weight: 600;
+    box-shadow: 0 6px 18px rgba(255, 157, 60, .35);
+  }
+  #game-action-btn:active { transform: scale(.96); }
+
   /* ---------- sky screen ---------- */
   #screen-sky { align-items: stretch; }
   #sky-stars { position: relative; height: 46vh; min-height: 260px; flex-shrink: 0; overflow: hidden; }
   .sky-star { position: absolute; border-radius: 50%; background: var(--glow-soft); box-shadow: 0 0 6px 2px rgba(255,214,107,.35); animation: twinkle 3s ease-in-out infinite; }
-  .sky-extra {
-    position: absolute; pointer-events: none;
-    filter: drop-shadow(0 0 8px rgba(255,255,255,.3));
-    animation: spacedrift 9s ease-in-out infinite, twinkle 4s ease-in-out infinite;
-  }
-  @keyframes spacedrift {
-    0%, 100% { transform: translate(0, 0) rotate(0deg); }
-    50% { transform: translate(var(--dx, 12px), var(--dy, -16px)) rotate(var(--rot, 8deg)); }
-  }
   .sky-sub { text-align: center; color: var(--text-dim); font-size: 14px; margin-top: 4px; }
   .progress-track { height: 14px; border-radius: 999px; background: rgba(255,255,255,.1); margin: 14px 0 4px; overflow: hidden; flex-shrink: 0; }
   .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--glow), var(--pink)); transition: width .6s ease; }
@@ -591,13 +605,30 @@
 <section class="screen" id="screen-sky">
   <div class="top-bar">
     <button class="icon-btn" id="sky-back" aria-label="Back">←</button>
-    <div class="who">🌌 Our Family Sky</div>
+    <div class="who" id="sky-title">🌌 Our Family Sky</div>
   </div>
   <div id="sky-stars"></div>
   <div class="sky-sub" id="sky-count"></div>
   <div class="progress-track"><div class="progress-fill" id="sky-progress"></div></div>
   <div class="progress-label" id="sky-progress-label"></div>
   <div id="rewards-list"></div>
+</section>
+
+<!-- ============ WONDER FLIGHT (hidden mini-game) ============ -->
+<section class="screen" id="screen-game">
+  <div class="top-bar">
+    <button class="icon-btn" id="game-back" aria-label="Back">←</button>
+    <div class="who">🚀 Wonder Flight</div>
+    <div class="chips"><div class="chip">✨ <span id="game-score">0</span></div></div>
+  </div>
+  <div id="game-wrap">
+    <canvas id="game-canvas"></canvas>
+    <div id="game-overlay">
+      <div id="game-overlay-title"></div>
+      <div id="game-overlay-sub"></div>
+      <button class="btn-primary" id="game-action-btn">Tap to launch! 🚀</button>
+    </div>
+  </div>
 </section>
 
 <!-- ============ ADMIN: ALL ENTRIES ============ -->
@@ -2237,26 +2268,6 @@ function openAdminView() {
 }
 
 // ---------- family sky ----------
-const SPACE_EXTRAS = ['🪐', '🚀', '🛸', '🌙', '☄️', '🛰️', '👽'];
-
-function addSkyExtras(holder) {
-  const count = 6 + Math.floor(Math.random() * 4); // 6–9, different every visit
-  for (let i = 0; i < count; i++) {
-    const el = document.createElement('div');
-    el.className = 'sky-extra';
-    el.textContent = SPACE_EXTRAS[Math.floor(Math.random() * SPACE_EXTRAS.length)];
-    el.style.left = (4 + Math.random() * 86) + '%';
-    el.style.top = (4 + Math.random() * 82) + '%';
-    el.style.fontSize = (16 + Math.random() * 16) + 'px';
-    el.style.setProperty('--dx', (Math.random() * 30 - 15) + 'px');
-    el.style.setProperty('--dy', (Math.random() * 30 - 15) + 'px');
-    el.style.setProperty('--rot', (Math.random() * 16 - 8) + 'deg');
-    el.style.animationDelay = (Math.random() * 5) + 's, ' + (Math.random() * 3) + 's';
-    el.style.animationDuration = (7 + Math.random() * 6) + 's, ' + (3 + Math.random() * 3) + 's';
-    holder.appendChild(el);
-  }
-}
-
 function openSky() {
   const total = Object.values(data.records).filter(r => r.type === 'entry' && !r.deleted).length;
   const holder = document.getElementById('sky-stars');
@@ -2274,7 +2285,6 @@ function openSky() {
     s.style.animationDelay = ((i % 9) / 3) + 's';
     holder.appendChild(s);
   }
-  addSkyExtras(holder);
   document.getElementById('sky-count').textContent = total === 0
     ? 'Every thought anyone drops in a jar becomes a star here ✨'
     : total + ' star' + (total === 1 ? '' : 's') + ' in our family sky';
@@ -2334,6 +2344,173 @@ function openSky() {
   }
   show('screen-sky');
 }
+
+// ---------- Wonder Flight (hidden Easter-egg mini-game) ----------
+const GAME = {
+  gravity: 0.42, jump: -7.2,
+  shipX: 64, shipSize: 26,
+  obstacleGap: 175, obstacleWidth: 46,
+  obstacleSpeed: 2.6, spawnEvery: 95,
+  sparkleChance: 0.55
+};
+let gameCanvas = null, gameCtx = null, gameLoopId = null, gameState = null;
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  if (h <= 0) return;
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+function setupGameCanvas() {
+  gameCanvas = document.getElementById('game-canvas');
+  gameCtx = gameCanvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const rect = gameCanvas.getBoundingClientRect();
+  gameCanvas.width = Math.round(rect.width * dpr);
+  gameCanvas.height = Math.round(rect.height * dpr);
+  gameCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w: rect.width, h: rect.height };
+}
+
+function resetGameState(w, h) {
+  return { running: false, over: false, frame: 0, shipY: h / 2, shipVel: 0, obstacles: [], sparkles: [], score: 0, w, h };
+}
+
+function showGameOverlay(title, sub, btnText) {
+  document.getElementById('game-overlay-title').textContent = title;
+  document.getElementById('game-overlay-sub').textContent = sub;
+  document.getElementById('game-action-btn').textContent = btnText;
+  document.getElementById('game-overlay').classList.remove('hidden');
+}
+function hideGameOverlay() { document.getElementById('game-overlay').classList.add('hidden'); }
+
+function openGame() {
+  show('screen-game');
+  const { w, h } = setupGameCanvas();
+  gameState = resetGameState(w, h);
+  showGameOverlay('Wonder Flight 🚀', 'Tap to fly your wonder-ship past the crystal gates. Grab sparkles for bonus points!', 'Tap to launch! 🚀');
+  document.getElementById('game-score').textContent = '0';
+}
+
+function startOrFlapGame() {
+  if (!gameState) return;
+  if (gameState.over) {
+    const { w, h } = setupGameCanvas();
+    gameState = resetGameState(w, h);
+  }
+  if (!gameState.running) {
+    gameState.running = true;
+    hideGameOverlay();
+    gameLoopId = requestAnimationFrame(gameTick);
+  }
+  gameState.shipVel = GAME.jump;
+}
+
+function gameTick() {
+  const s = gameState;
+  if (!s || !s.running) return;
+  s.frame++;
+  s.shipVel += GAME.gravity;
+  s.shipY += s.shipVel;
+
+  if (s.frame % GAME.spawnEvery === 0) {
+    const margin = 36;
+    const gapY = margin + Math.random() * (s.h - margin * 2 - GAME.obstacleGap);
+    s.obstacles.push({ x: s.w + GAME.obstacleWidth, gapY, passed: false });
+    if (Math.random() < GAME.sparkleChance) {
+      s.sparkles.push({ x: s.w + GAME.obstacleWidth, y: gapY + GAME.obstacleGap / 2, taken: false });
+    }
+  }
+  for (const o of s.obstacles) o.x -= GAME.obstacleSpeed;
+  for (const sp of s.sparkles) sp.x -= GAME.obstacleSpeed;
+  s.obstacles = s.obstacles.filter(o => o.x > -GAME.obstacleWidth);
+  s.sparkles = s.sparkles.filter(sp => sp.x > -20);
+
+  for (const o of s.obstacles) {
+    const withinX = GAME.shipX + GAME.shipSize / 2 > o.x && GAME.shipX - GAME.shipSize / 2 < o.x + GAME.obstacleWidth;
+    if (withinX) {
+      const hitTop = s.shipY - GAME.shipSize / 2 < o.gapY;
+      const hitBottom = s.shipY + GAME.shipSize / 2 > o.gapY + GAME.obstacleGap;
+      if (hitTop || hitBottom) { endGame(); return; }
+    }
+    if (!o.passed && o.x + GAME.obstacleWidth < GAME.shipX) { o.passed = true; s.score++; }
+  }
+  for (const sp of s.sparkles) {
+    if (sp.taken) continue;
+    const dx = sp.x - GAME.shipX, dy = sp.y - s.shipY;
+    if (Math.sqrt(dx * dx + dy * dy) < 22) { sp.taken = true; s.score += 3; }
+  }
+  s.sparkles = s.sparkles.filter(sp => !sp.taken);
+
+  if (s.shipY - GAME.shipSize / 2 < 0 || s.shipY + GAME.shipSize / 2 > s.h) { endGame(); return; }
+
+  document.getElementById('game-score').textContent = s.score;
+  renderGame();
+  gameLoopId = requestAnimationFrame(gameTick);
+}
+
+function renderGame() {
+  const s = gameState, ctx = gameCtx;
+  ctx.clearRect(0, 0, s.w, s.h);
+  for (const o of s.obstacles) {
+    ctx.fillStyle = 'rgba(184,169,245,.35)';
+    ctx.strokeStyle = 'rgba(210,225,255,.5)';
+    ctx.lineWidth = 2;
+    roundRectPath(ctx, o.x, 0, GAME.obstacleWidth, o.gapY, 10);
+    ctx.fill(); ctx.stroke();
+    roundRectPath(ctx, o.x, o.gapY + GAME.obstacleGap, GAME.obstacleWidth, s.h - (o.gapY + GAME.obstacleGap), 10);
+    ctx.fill(); ctx.stroke();
+  }
+  ctx.font = '20px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const sp of s.sparkles) ctx.fillText('✨', sp.x, sp.y);
+  ctx.save();
+  ctx.translate(GAME.shipX, s.shipY);
+  ctx.rotate(Math.max(-0.5, Math.min(0.9, s.shipVel * 0.05)));
+  ctx.font = (GAME.shipSize + 8) + 'px sans-serif';
+  ctx.fillText('🚀', 0, 0);
+  ctx.restore();
+}
+
+function endGame() {
+  const s = gameState;
+  s.running = false; s.over = true;
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  const kidId = currentKid ? currentKid.id : 'guest';
+  const prevHigh = Number(Store.get('game_high_' + kidId, 0)) || 0;
+  const isNewHigh = s.score > prevHigh && s.score > 0;
+  if (isNewHigh) Store.set('game_high_' + kidId, s.score);
+  const high = Math.max(prevHigh, s.score);
+  if (isNewHigh) confettiBurst(40);
+  showGameOverlay(
+    isNewHigh ? 'New high score! 🏆' : 'Crash landing! 💥',
+    'Score: ' + s.score + '   ·   Best: ' + high,
+    'Fly again! 🚀'
+  );
+}
+
+document.getElementById('game-canvas').addEventListener('pointerdown', (e) => { e.preventDefault(); startOrFlapGame(); });
+document.getElementById('game-action-btn').addEventListener('click', startOrFlapGame);
+document.getElementById('game-back').addEventListener('click', () => {
+  if (gameLoopId) cancelAnimationFrame(gameLoopId);
+  gameState = null;
+  show('screen-sky');
+});
+
+// tap the sky title 5x quickly to launch the hidden mini-game
+let skyTapCount = 0, skyTapTimer = null;
+document.getElementById('sky-title').addEventListener('click', () => {
+  skyTapCount++;
+  clearTimeout(skyTapTimer);
+  skyTapTimer = setTimeout(() => { skyTapCount = 0; }, 2000);
+  if (skyTapCount >= 5) { skyTapCount = 0; openGame(); }
+});
 
 // ---------- keepsake book (print / save as PDF) ----------
 function printKeepsake(personId) {
