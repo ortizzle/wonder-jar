@@ -619,7 +619,7 @@
 <section class="screen" id="screen-game">
   <div class="top-bar">
     <button class="icon-btn" id="game-back" aria-label="Back">←</button>
-    <div class="who">🚀 Wonder Flight</div>
+    <div class="who" id="game-title">🕹️ Secret Arcade</div>
     <div class="chips"><div class="chip">✨ <span id="game-score">0</span></div></div>
   </div>
   <div id="game-wrap">
@@ -2406,7 +2406,7 @@ function openSky() {
   show('screen-sky');
 }
 
-// ---------- Wonder Flight (hidden Easter-egg mini-game) ----------
+// ---------- Secret Arcade (hidden Easter-egg mini-games) ----------
 const GAME = {
   gravity: 0.26, jump: -5.6,
   shipX: 64, shipSize: 26, shipHitbox: 15, // hitbox smaller than the visual ship — forgiving near-misses
@@ -2414,7 +2414,16 @@ const GAME = {
   obstacleSpeed: 1.7, spawnEvery: 130,
   sparkleChance: 0.6
 };
-let gameCanvas = null, gameCtx = null, gameLoopId = null, gameState = null;
+const CATCH_GAME = { durationFrames: 60 * 60, spawnEvery: 50, goldChance: 0.14, tapSlop: 34 };
+const BLAST_GAME = { fireEvery: 20, laserSpeed: 7.5, spawnEvery: 70, lives: 3, shipY: 58 };
+
+const MODE_INFO = {
+  flight:  { name: '🚀 Wonder Flight', sub: 'Tap to fly your wonder-ship past the crystal gates. Grab sparkles for bonus points!', btn: 'Tap to launch! 🚀', highKey: 'game_high_' },
+  catch:   { name: '🏮 Firefly Catch', sub: 'Tap the fireflies before they drift away — golden stars are worth 5! One minute of catching, and no way to lose.', btn: 'Start catching! ✨', highKey: 'game_high_catch_' },
+  blaster: { name: '☄️ Star Blaster', sub: 'Slide your finger to steer — your ship fires all by itself. Blast the asteroids before they hit you! You have 3 shields.', btn: 'Blast off! ☄️', highKey: 'game_high_blaster_' }
+};
+
+let gameCanvas = null, gameCtx = null, gameLoopId = null, gameState = null, gameMode = 'flight';
 
 function roundRectPath(ctx, x, y, w, h, r) {
   if (h <= 0) return;
@@ -2440,7 +2449,10 @@ function setupGameCanvas() {
 }
 
 function resetGameState(w, h) {
-  return { running: false, over: false, frame: 0, shipY: h / 2, shipVel: 0, obstacles: [], sparkles: [], score: 0, w, h };
+  const base = { running: false, over: false, frame: 0, score: 0, w, h };
+  if (gameMode === 'catch') return { ...base, flies: [], pops: [], timeLeft: CATCH_GAME.durationFrames };
+  if (gameMode === 'blaster') return { ...base, shipX: w / 2, lasers: [], rocks: [], bursts: [], lives: BLAST_GAME.lives, hitFlash: 0 };
+  return { ...base, shipY: h / 2, shipVel: 0, obstacles: [], sparkles: [] };
 }
 
 function showGameOverlay(title, sub, btnText) {
@@ -2451,32 +2463,87 @@ function showGameOverlay(title, sub, btnText) {
 }
 function hideGameOverlay() { document.getElementById('game-overlay').classList.add('hidden'); }
 
-function openGame() {
+function openGame(mode) {
+  gameMode = mode;
   show('screen-game');
+  document.getElementById('game-title').textContent = MODE_INFO[mode].name;
   const { w, h } = setupGameCanvas();
   gameState = resetGameState(w, h);
-  showGameOverlay('Wonder Flight 🚀', 'Tap to fly your wonder-ship past the crystal gates. Grab sparkles for bonus points!', 'Tap to launch! 🚀');
+  showGameOverlay(MODE_INFO[mode].name, MODE_INFO[mode].sub, MODE_INFO[mode].btn);
   document.getElementById('game-score').textContent = '0';
 }
 
-function startOrFlapGame() {
+function openArcade() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h = document.createElement('h3');
+  h.textContent = '🕹️ You found the Secret Arcade!';
+  box.appendChild(h);
+
+  const list = document.createElement('div');
+  list.style.marginTop = '12px';
+  const kidId = currentKid ? currentKid.id : 'guest';
+  for (const [mode, info] of Object.entries(MODE_INFO)) {
+    const b = document.createElement('button');
+    b.className = 'prompt-list-btn';
+    const high = Number(Store.get(info.highKey + kidId, 0)) || 0;
+    b.textContent = info.name + (high ? '   ·   best ' + high : '');
+    b.addEventListener('click', () => { overlay.remove(); openGame(mode); });
+    list.appendChild(b);
+  }
+  box.appendChild(list);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const cancel = document.createElement('button');
+  cancel.className = 'btn-secondary';
+  cancel.textContent = 'Sneak away 🤫';
+  cancel.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(cancel);
+  box.appendChild(btnRow);
+
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+function startGame() {
   if (!gameState) return;
   if (gameState.over) {
     const { w, h } = setupGameCanvas();
     gameState = resetGameState(w, h);
+    document.getElementById('game-score').textContent = '0';
   }
   if (!gameState.running) {
     gameState.running = true;
     hideGameOverlay();
     gameLoopId = requestAnimationFrame(gameTick);
   }
-  gameState.shipVel = GAME.jump;
+  if (gameMode === 'flight') gameState.shipVel = GAME.jump;
+}
+
+function canvasPos(e) {
+  const rect = gameCanvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
 function gameTick() {
   const s = gameState;
   if (!s || !s.running) return;
   s.frame++;
+  if (gameMode === 'catch') tickCatch(s);
+  else if (gameMode === 'blaster') tickBlaster(s);
+  else tickFlight(s);
+  if (!s.running) return; // game ended during this tick
+  document.getElementById('game-score').textContent = s.score;
+  renderGame();
+  gameLoopId = requestAnimationFrame(gameTick);
+}
+
+function tickFlight(s) {
   s.shipVel += GAME.gravity;
   s.shipY += s.shipVel;
 
@@ -2510,15 +2577,197 @@ function gameTick() {
   s.sparkles = s.sparkles.filter(sp => !sp.taken);
 
   if (s.shipY - GAME.shipHitbox / 2 < 0 || s.shipY + GAME.shipHitbox / 2 > s.h) { endGame(); return; }
+}
 
-  document.getElementById('game-score').textContent = s.score;
-  renderGame();
-  gameLoopId = requestAnimationFrame(gameTick);
+function tickCatch(s) {
+  s.timeLeft--;
+  if (s.timeLeft <= 0) { endGame(); return; }
+  // fireflies drift in a little faster as the minute goes on
+  const spawnEvery = Math.max(28, CATCH_GAME.spawnEvery - Math.floor(s.frame / 500) * 4);
+  if (s.frame % spawnEvery === 0) {
+    s.flies.push({
+      x: 24 + Math.random() * (s.w - 48),
+      y: -12,
+      speed: 0.8 + Math.random() * 1.0,
+      phase: Math.random() * 100,
+      gold: Math.random() < CATCH_GAME.goldChance
+    });
+  }
+  for (const f of s.flies) {
+    f.y += f.speed;
+    f.x += Math.sin((s.frame + f.phase) / 28) * 0.8;
+  }
+  s.flies = s.flies.filter(f => f.y < s.h + 20); // drifting past the bottom is fine — no penalty
+  for (const p of s.pops) p.age++;
+  s.pops = s.pops.filter(p => p.age < 22);
+}
+
+function catchTap(x, y) {
+  const s = gameState;
+  let bestIdx = -1, bestD = Infinity;
+  for (let i = 0; i < s.flies.length; i++) {
+    const d = Math.hypot(s.flies[i].x - x, s.flies[i].y - y);
+    if (d < bestD) { bestD = d; bestIdx = i; }
+  }
+  if (bestIdx >= 0 && bestD < CATCH_GAME.tapSlop) {
+    const f = s.flies[bestIdx];
+    s.flies.splice(bestIdx, 1);
+    const pts = f.gold ? 5 : 1;
+    s.score += pts;
+    s.pops.push({ x: f.x, y: f.y, age: 0, label: '+' + pts });
+    document.getElementById('game-score').textContent = s.score;
+  }
+}
+
+function tickBlaster(s) {
+  if (s.frame % BLAST_GAME.fireEvery === 0) {
+    s.lasers.push({ x: s.shipX, y: s.h - BLAST_GAME.shipY - 20 });
+  }
+  for (const l of s.lasers) l.y -= BLAST_GAME.laserSpeed;
+  s.lasers = s.lasers.filter(l => l.y > -14 && !l.spent);
+
+  const spawnEvery = Math.max(42, BLAST_GAME.spawnEvery - Math.floor(s.frame / 600) * 5);
+  if (s.frame % spawnEvery === 0) {
+    const roll = Math.random();
+    let rock;
+    if (roll < 0.15) rock = { kind: '🛸', r: 15, hp: 1, pts: 5, speed: 1.3, zig: true };
+    else if (roll < 0.5) rock = { kind: '☄️', r: 13, hp: 1, pts: 3, speed: 1.6, zig: false };
+    else rock = { kind: '🪨', r: 19, hp: 2, pts: 2, speed: 0.9, zig: false };
+    rock.x = 26 + Math.random() * (s.w - 52);
+    rock.y = -24;
+    rock.phase = Math.random() * 100;
+    s.rocks.push(rock);
+  }
+  const shipYpos = s.h - BLAST_GAME.shipY;
+  for (const r of s.rocks) {
+    r.y += r.speed;
+    if (r.zig) r.x += Math.sin((s.frame + r.phase) / 20) * 1.6;
+  }
+  // lasers vs rocks
+  for (const l of s.lasers) {
+    for (const r of s.rocks) {
+      if (r.dead) continue;
+      const dx = l.x - r.x, dy = l.y - r.y;
+      if (dx * dx + dy * dy < (r.r + 5) * (r.r + 5)) {
+        l.spent = true;
+        r.hp--;
+        if (r.hp <= 0) {
+          r.dead = true;
+          s.score += r.pts;
+          s.bursts.push({ x: r.x, y: r.y, age: 0, big: r.r > 16 });
+        }
+        break;
+      }
+    }
+  }
+  s.lasers = s.lasers.filter(l => !l.spent);
+  // rocks vs ship
+  for (const r of s.rocks) {
+    if (r.dead) continue;
+    const dx = r.x - s.shipX, dy = r.y - shipYpos;
+    if (dx * dx + dy * dy < (r.r + 15) * (r.r + 15)) {
+      r.dead = true;
+      s.bursts.push({ x: r.x, y: r.y, age: 0, big: true });
+      s.lives--;
+      s.hitFlash = 18;
+      if (s.lives <= 0) { endGame(); return; }
+    }
+  }
+  s.rocks = s.rocks.filter(r => !r.dead && r.y < s.h + 30); // slipping past the bottom is fine — no penalty
+  for (const b of s.bursts) b.age++;
+  s.bursts = s.bursts.filter(b => b.age < 24);
+  if (s.hitFlash > 0) s.hitFlash--;
 }
 
 function renderGame() {
   const s = gameState, ctx = gameCtx;
   ctx.clearRect(0, 0, s.w, s.h);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (gameMode === 'catch') renderCatch(s, ctx);
+  else if (gameMode === 'blaster') renderBlaster(s, ctx);
+  else renderFlight(s, ctx);
+}
+
+function renderCatch(s, ctx) {
+  // time bar
+  const frac = Math.max(0, s.timeLeft / CATCH_GAME.durationFrames);
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  roundRectPath(ctx, 12, 10, s.w - 24, 8, 4);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255,214,107,.85)';
+  roundRectPath(ctx, 12, 10, Math.max(8, (s.w - 24) * frac), 8, 4);
+  ctx.fill();
+
+  for (const f of s.flies) {
+    if (f.gold) {
+      ctx.font = '26px sans-serif';
+      ctx.fillText('⭐', f.x, f.y);
+    } else {
+      const grd = ctx.createRadialGradient(f.x, f.y, 1, f.x, f.y, 14);
+      grd.addColorStop(0, 'rgba(255,233,173,1)');
+      grd.addColorStop(0.4, 'rgba(255,214,107,.8)');
+      grd.addColorStop(1, 'rgba(255,214,107,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  for (const p of s.pops) {
+    const t = p.age / 22;
+    ctx.strokeStyle = 'rgba(255,214,107,' + (1 - t) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 8 + t * 26, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,233,173,' + (1 - t) + ')';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(p.label, p.x, p.y - 18 - t * 14);
+  }
+}
+
+function renderBlaster(s, ctx) {
+  ctx.strokeStyle = 'rgba(123,224,214,.9)';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  for (const l of s.lasers) {
+    ctx.beginPath();
+    ctx.moveTo(l.x, l.y);
+    ctx.lineTo(l.x, l.y + 12);
+    ctx.stroke();
+  }
+  for (const r of s.rocks) {
+    ctx.font = (r.r * 2) + 'px sans-serif';
+    ctx.fillText(r.kind, r.x, r.y);
+  }
+  for (const b of s.bursts) {
+    const t = b.age / 24;
+    ctx.strokeStyle = 'rgba(255,157,60,' + (1 - t) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, (b.big ? 12 : 8) + t * (b.big ? 34 : 22), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // ship (🚀 points up-right by default; rotate so it points up)
+  ctx.save();
+  ctx.translate(s.shipX, s.h - BLAST_GAME.shipY);
+  ctx.rotate(-Math.PI / 4);
+  ctx.font = '34px sans-serif';
+  ctx.fillText('🚀', 0, 0);
+  ctx.restore();
+  // shields
+  ctx.textAlign = 'left';
+  ctx.font = '16px sans-serif';
+  ctx.fillText('🛡️'.repeat(Math.max(0, s.lives)), 12, 28);
+  ctx.textAlign = 'center';
+  if (s.hitFlash > 0) {
+    ctx.fillStyle = 'rgba(245,111,111,' + (s.hitFlash / 18 * 0.25) + ')';
+    ctx.fillRect(0, 0, s.w, s.h);
+  }
+}
+
+function renderFlight(s, ctx) {
   for (const o of s.obstacles) {
     ctx.fillStyle = 'rgba(184,169,245,.35)';
     ctx.strokeStyle = 'rgba(210,225,255,.5)';
@@ -2544,33 +2793,47 @@ function endGame() {
   s.running = false; s.over = true;
   if (gameLoopId) cancelAnimationFrame(gameLoopId);
   const kidId = currentKid ? currentKid.id : 'guest';
-  const prevHigh = Number(Store.get('game_high_' + kidId, 0)) || 0;
+  const info = MODE_INFO[gameMode];
+  const prevHigh = Number(Store.get(info.highKey + kidId, 0)) || 0;
   const isNewHigh = s.score > prevHigh && s.score > 0;
-  if (isNewHigh) Store.set('game_high_' + kidId, s.score);
+  if (isNewHigh) Store.set(info.highKey + kidId, s.score);
   const high = Math.max(prevHigh, s.score);
   if (isNewHigh) confettiBurst(40);
-  showGameOverlay(
-    isNewHigh ? 'New high score! 🏆' : 'Crash landing! 💥',
-    'Score: ' + s.score + '   ·   Best: ' + high,
-    'Fly again! 🚀'
-  );
+  let title;
+  if (isNewHigh) title = 'New high score! 🏆';
+  else if (gameMode === 'catch') title = "Time's up! 🌟";
+  else if (gameMode === 'blaster') title = 'Shields down! 💥';
+  else title = 'Crash landing! 💥';
+  showGameOverlay(title, 'Score: ' + s.score + '   ·   Best: ' + high, 'Play again! 🎮');
 }
 
-document.getElementById('game-canvas').addEventListener('pointerdown', (e) => { e.preventDefault(); startOrFlapGame(); });
-document.getElementById('game-action-btn').addEventListener('click', startOrFlapGame);
+document.getElementById('game-canvas').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (!gameState || !gameState.running) return; // overlay button handles starting
+  const p = canvasPos(e);
+  if (gameMode === 'flight') gameState.shipVel = GAME.jump;
+  else if (gameMode === 'catch') catchTap(p.x, p.y);
+  else gameState.shipX = Math.max(18, Math.min(gameState.w - 18, p.x));
+});
+document.getElementById('game-canvas').addEventListener('pointermove', (e) => {
+  if (!gameState || !gameState.running || gameMode !== 'blaster') return;
+  const p = canvasPos(e);
+  gameState.shipX = Math.max(18, Math.min(gameState.w - 18, p.x));
+});
+document.getElementById('game-action-btn').addEventListener('click', startGame);
 document.getElementById('game-back').addEventListener('click', () => {
   if (gameLoopId) cancelAnimationFrame(gameLoopId);
   gameState = null;
   show('screen-sky');
 });
 
-// tap the sky title 5x quickly to launch the hidden mini-game
+// tap the sky title 5x quickly to open the Secret Arcade
 let skyTapCount = 0, skyTapTimer = null;
 document.getElementById('sky-title').addEventListener('click', () => {
   skyTapCount++;
   clearTimeout(skyTapTimer);
   skyTapTimer = setTimeout(() => { skyTapCount = 0; }, 2000);
-  if (skyTapCount >= 5) { skyTapCount = 0; openGame(); }
+  if (skyTapCount >= 5) { skyTapCount = 0; openArcade(); }
 });
 
 // ---------- keepsake book (print / save as PDF) ----------
