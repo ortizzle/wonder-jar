@@ -174,12 +174,21 @@
   }
   #prompt-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--lavender); font-weight: 800; }
   #prompt-text { font-family: 'Fredoka'; font-size: 21px; font-weight: 600; margin-top: 6px; line-height: 1.3; }
-  #shuffle-btn {
-    margin-top: 10px; min-height: 44px; padding: 0 18px;
+  .prompt-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+  .prompt-pill {
+    min-height: 44px; padding: 0 14px;
     border-radius: 999px; background: rgba(184,169,245,.15);
-    color: var(--lavender); font-weight: 800; font-size: 14px;
+    color: var(--lavender); font-weight: 800; font-size: 13px;
   }
-  #shuffle-btn:active { transform: rotate(-3deg) scale(.95); }
+  .prompt-pill:active { transform: rotate(-3deg) scale(.95); }
+  .prompt-list-btn {
+    width: 100%; text-align: left; white-space: normal; line-height: 1.35;
+    margin-bottom: 8px; padding: 12px 14px; min-height: 44px;
+    border-radius: 12px; background: rgba(184,169,245,.15); color: var(--lavender);
+    font-weight: 700; font-size: 14px;
+  }
+  .prompt-list-btn:active { background: rgba(184,169,245,.3); }
+  .qa-question { font-size: 12px; color: var(--lavender); font-weight: 800; margin-bottom: 4px; }
 
   /* ---------- mic / capture ---------- */
   #capture-zone {
@@ -499,7 +508,6 @@
   <p class="profiles-hint">Who's filling their jar tonight?</p>
   <div class="profile-actions">
     <button class="pill-btn" id="sky-btn">🌌 Our Family Sky</button>
-    <button class="pill-btn" id="admin-btn">🗂️ All Entries</button>
     <button class="pill-btn" id="settings-btn">⚙️ Grown-up stuff</button>
   </div>
 </section>
@@ -546,7 +554,11 @@
   <div id="prompt-card">
     <div id="prompt-label">✦ Tonight's wonder question ✦</div>
     <div id="prompt-text"></div>
-    <button id="shuffle-btn">🎲 Different question!</button>
+    <div class="prompt-actions">
+      <button id="shuffle-btn" class="prompt-pill">🎲 Shuffle</button>
+      <button id="pick-btn" class="prompt-pill">📚 Pick one</button>
+      <button id="freewrite-btn" class="prompt-pill">✍️ Write freely</button>
+    </div>
   </div>
 
   <div id="capture-zone">
@@ -1124,10 +1136,14 @@ function renderStats(popWhich) {
   }
 }
 
-function pickPrompt(shuffle) {
-  if (shuffle) {
+function pickPrompt(mode) {
+  if (mode === 'free') {
+    currentPrompt = '';
+  } else if (typeof mode === 'string') {
+    currentPrompt = mode; // explicit prompt chosen from the list
+  } else if (mode === true) {
     let next = currentPrompt;
-    while (next === currentPrompt) next = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
+    while (!next || next === currentPrompt) next = PROMPTS[Math.floor(Math.random() * PROMPTS.length)];
     currentPrompt = next;
   } else {
     // stable prompt per kid per day
@@ -1136,7 +1152,54 @@ function pickPrompt(shuffle) {
     for (const ch of seedStr) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     currentPrompt = PROMPTS[h % PROMPTS.length];
   }
-  document.getElementById('prompt-text').textContent = currentPrompt;
+  renderPromptCard();
+}
+
+function renderPromptCard() {
+  const label = document.getElementById('prompt-label');
+  const text = document.getElementById('prompt-text');
+  if (currentPrompt) {
+    label.textContent = "✦ Tonight's wonder question ✦";
+    text.textContent = currentPrompt;
+  } else {
+    label.textContent = '✦ Writing freely ✦';
+    text.textContent = 'Write about anything on your mind — big or small.';
+  }
+}
+
+function showPromptListPicker() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box settings-box';
+
+  const h = document.createElement('h3');
+  h.textContent = 'Pick a question 📚';
+  box.appendChild(h);
+
+  const list = document.createElement('div');
+  list.style.marginTop = '12px';
+  for (const p of PROMPTS) {
+    const b = document.createElement('button');
+    b.className = 'prompt-list-btn';
+    b.textContent = p;
+    b.addEventListener('click', () => { pickPrompt(p); overlay.remove(); });
+    list.appendChild(b);
+  }
+  box.appendChild(list);
+
+  const btnRow = document.createElement('div');
+  btnRow.className = 'modal-buttons';
+  const cancel = document.createElement('button');
+  cancel.className = 'btn-secondary';
+  cancel.textContent = 'Never mind';
+  cancel.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(cancel);
+  box.appendChild(btnRow);
+
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 function renderJarFireflies() {
@@ -1551,6 +1614,12 @@ function heartsLabel(entry) {
 function makeEntryRow(entry, { own, onChanged }) {
   const row = document.createElement('div');
   row.className = 'entry-row';
+  if (entry.prompt) {
+    const q = document.createElement('div');
+    q.className = 'qa-question';
+    q.textContent = 'Q: ' + entry.prompt;
+    row.appendChild(q);
+  }
   const txt = document.createElement('div');
   txt.className = 'entry-text';
   txt.textContent = '“' + entry.text + '”';
@@ -1660,10 +1729,21 @@ function renderFamilyTab(content) {
   const report = document.createElement('button');
   report.className = 'btn-small';
   report.style.width = '100%';
-  report.style.marginBottom = '10px';
+  report.style.marginBottom = '8px';
   report.textContent = '🔮 Wonder Report for parents';
   report.addEventListener('click', () => generateInsights('parent'));
   content.appendChild(report);
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'btn-small';
+  allBtn.style.width = '100%';
+  allBtn.style.marginBottom = '10px';
+  allBtn.textContent = '🗂️ All Entries (question + answer)';
+  allBtn.addEventListener('click', () => {
+    document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+    openAdminView();
+  });
+  content.appendChild(allBtn);
 
   const entries = Object.values(data.records)
     .filter(r => r.type === 'entry' && !r.deleted && r.kidId !== currentKid.id)
@@ -1947,8 +2027,9 @@ async function maybeFollowUp(entryId) {
   const guideId = owned[Math.floor(Math.random() * owned.length)];
   const guide = GLIMMERS.find(g => g.id === guideId) || GLIMMERS[0];
   try {
+    const promptContext = rec.prompt ? ' (the prompt was "' + rec.prompt + '")' : '';
     const q = await askClaude(
-      'A child named ' + currentKid.name + ' just wrote this in their gratitude journal (the prompt was "' + rec.prompt + '"): "' + rec.text + '". ' +
+      'A child named ' + currentKid.name + ' just wrote this in their gratitude journal' + promptContext + ': "' + rec.text + '". ' +
       'Reply with exactly ONE warm, curious follow-up question, under 15 words, that invites them to reflect a little deeper. Reply with only the question.',
       {
         system: 'You are a warm, curious creature living in a gratitude journal used by kids aged 9–12. Ask one genuine follow-up question that invites real reflection — about feelings, specific details, or why the moment mattered. Respect their intelligence: never babyish, never advice, never negative or scary.',
@@ -2074,14 +2155,24 @@ function makeAdminEntryRow(entry) {
   nm.textContent = personName(entry.kidId);
   header.append(av, nm);
 
+  const parts = [header];
+  if (entry.prompt) {
+    const q = document.createElement('div');
+    q.className = 'qa-question';
+    q.textContent = 'Q: ' + entry.prompt;
+    parts.push(q);
+  }
+
   const txt = document.createElement('div');
   txt.className = 'entry-text';
   txt.textContent = '“' + entry.text + '”';
+  parts.push(txt);
 
   const meta = document.createElement('div');
   meta.className = 'entry-meta';
   const hearts = reactionsForEntry(entry.id);
   meta.textContent = AZ.pretty(entry.date) + (hearts.length ? '   ❤️ ' + hearts.length : '');
+  parts.push(meta);
 
   const actions = document.createElement('div');
   actions.className = 'entry-actions';
@@ -2100,8 +2191,9 @@ function makeAdminEntryRow(entry) {
     });
   });
   actions.appendChild(del);
+  parts.push(actions);
 
-  row.append(header, txt, meta, actions);
+  row.append(...parts);
   return row;
 }
 
@@ -2593,12 +2685,13 @@ document.getElementById('back-btn').addEventListener('click', () => {
   show('screen-profiles');
 });
 document.getElementById('shuffle-btn').addEventListener('click', () => pickPrompt(true));
+document.getElementById('pick-btn').addEventListener('click', showPromptListPicker);
+document.getElementById('freewrite-btn').addEventListener('click', () => pickPrompt('free'));
 document.getElementById('sky-btn').addEventListener('click', openSky);
 document.getElementById('sky-back').addEventListener('click', () => {
   renderProfiles();
   show('screen-profiles');
 });
-document.getElementById('admin-btn').addEventListener('click', () => requireParentPin(openAdminView));
 document.getElementById('admin-back').addEventListener('click', () => {
   renderProfiles();
   show('screen-profiles');
