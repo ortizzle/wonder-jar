@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wonder Jar — tests</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0b0c2a; color: #eee; padding: 20px; }
+  h1 { font-size: 20px; }
+  .warn { color: #ffd66b; font-size: 13px; }
+  #results div { padding: 4px 8px; font-size: 14px; }
+  .pass { color: #7be0d6; }
+  .fail { color: #ff8896; font-weight: bold; }
+  #summary { margin-top: 12px; font-size: 16px; font-weight: bold; }
+  #stage { width: 420px; height: 700px; border: 1px solid #333; margin-top: 16px; opacity: .6; }
+</style>
+</head>
+<body>
+<h1>🫙 Wonder Jar — follow-up question tests</h1>
+<p class="warn">Serve over http(s) and open this page. Your real jar data is snapshotted before the tests run and restored afterward.</p>
+<div id="results"></div>
+<div id="summary">Running…</div>
+<iframe id="stage"></iframe>
+
+<script>
+/* ============================================================
+   Zero-dependency test harness.
+   Loads the real app in an iframe with the Anthropic API stubbed
+   (scripted questions), drives the UI like a kid would, and
+   asserts on the records in localStorage.
+
+   What it proves:
+   - each unique follow-up question is stored as its own {q, a}
+     pair on the entry (never mushed into the entry text)
+   - a repeated question never creates a second slot
+   - the one-glowing-thought-per-night append still works
+   - follow-ups stop after MAX_FOLLOWUPS questions
+   ============================================================ */
+
+const results = document.getElementById('results');
+const summary = document.getElementById('summary');
+let failures = 0;
+
+function report(ok, label, detail) {
+  const d = document.createElement('div');
+  d.className = ok ? 'pass' : 'fail';
+  d.textContent = (ok ? '✅ ' : '❌ ') + label + (ok || !detail ? '' : ' — ' + detail);
+  results.appendChild(d);
+  if (!ok) failures++;
+}
+function assertEqual(actual, expected, label) {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  report(ok, label, ok ? '' : 'expected ' + JSON.stringify(expected) + ', got ' + JSON.stringify(actual));
+}
+function assert(cond, label, detail) { report(!!cond, label, detail); }
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function waitFor(fn, label, timeout = 8000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try { const v = fn(); if (v) return v; } catch (e) {}
+    await sleep(100);
+  }
+  throw new Error('Timed out waiting for: ' + label);
+}
+
+/* ---- real-data safety: snapshot every wonderjar_* key, restore at the end ---- */
+function snapshotStore() {
+  const snap = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('wonderjar_')) snap[k] = localStorage.getItem(k);
+  }
+  return snap;
+}
+function wipeStore() {
+  for (const k of Object.keys(snapshotStore())) localStorage.removeItem(k);
+}
+function restoreStore(snap) {
+  wipeStore();
+  for (const [k, v] of Object.entries(snap)) localStorage.setItem(k, v);
+}
+
+/* ---- boot the real app in the iframe with stubs injected before its script ---- */
+async function bootApp(questions) {
+  wipeStore();
+  localStorage.setItem('wonderjar_anthropic_key', JSON.stringify('test-key'));
+
+  // external font stylesheets block script execution while pending — tests must run offline
+  const html = (await (await fetch('index.html')).text())
+    .replace(/<link[^>]*fonts\.g[^>]*>/g, '');
+  const stub = `<script>
+    window.SpeechRecognition = undefined;   // force the typing path
+    window.webkitSpeechRecognition = undefined;
+    try {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: { register: () => Promise.resolve(), controller: null }
+      });
+    } catch (e) {}
+    window.__claudeCalls = 0;
+    const __questions = ${JSON.stringify(questions)};
+    const __realFetch = window.fetch.bind(window);
+    window.fetch = (url, opts) => {
+      const u = String(url);
+      if (u.includes('api.anthropic.com')) {
+        const q = __questions[Math.min(window.__claudeCalls, __questions.length - 1)];
+        window.__claudeCalls++;
+        return Promise.resolve(new Response(
+          JSON.stringify({ content: [{ type: 'text', text: q }] }), { status: 200 }));
+      }
+      if (u.includes('api.github.com')) return Promise.reject(new Error('blocked in tests'));
+      return __realFetch(url, opts);
+    };
+  <\/script>`;
+
+  // a fresh iframe per scenario — document.open() reuses the window, so old script bindings would clash
+  const old = document.getElementById('stage');
+  const iframe = document.createElement('iframe');
+  iframe.id = 'stage';
+  old.replaceWith(iframe);
+  const doc = iframe.contentDocument;
+  doc.open();
+  doc.write(html.replace('<script>', stub + '\n<script>'));
+  doc.close();
+  await waitFor(() => doc.querySelector('.kid-card'), 'app boot');
+  return { doc, win: iframe.contentWindow };
+}
+
+/* ---- UI driving helpers ---- */
+function clickKid(doc, name) {
+  const card = [...doc.querySelectorAll('.kid-card')]
+    .find(c => c.querySelector('.kid-name').textContent === name);
+  card.click();
+}
+async function typeAndSave(doc, text) {
+  if (doc.getElementById('type-link').style.display !== 'none') doc.getElementById('type-link').click();
+  doc.getElementById('transcript-box').value = text;
+  doc.getElementById('save-btn').click();
+}
+async function dismissRevealsUntilFollowUp(doc) {
+  return waitFor(() => {
+    const card = doc.getElementById('followup-card');
+    if (card) return card;
+    const btn = doc.querySelector('.modal-overlay .btn-primary');
+    if (btn) btn.click();  // glimmer / badge reveal — click through the celebration queue
+    return null;
+  }, 'follow-up card');
+}
+function answerFollowUp(doc, answer) {
+  const more = [...doc.querySelectorAll('#followup-card button')]
+    .find(b => b.textContent.includes('Tell more'));
+  more.click();  // shows the typing box (SR is stubbed out)
+  doc.getElementById('transcript-box').value = answer;
+  doc.getElementById('save-btn').click();
+}
+function riverEntry() {
+  const data = JSON.parse(localStorage.getItem('wonderjar_data'));
+  return Object.values(data.records).find(r => r.type === 'entry' && r.kidId === 'river' && !r.deleted);
+}
+
+/* ---- scenario 1: unique questions → unique answers ---- */
+async function scenarioUniquePairs() {
+  const Q1 = 'Who was with you when it happened?';
+  const Q2 = 'What did it feel like right at that moment?';
+  const Q3 = 'Why do you think it mattered so much?';
+  const { doc, win } = await bootApp([Q1, Q2, Q3, 'Q4 should never be asked']);
+
+  clickKid(doc, 'River');
+  await typeAndSave(doc, 'I loved the park today');
+  await dismissRevealsUntilFollowUp(doc);
+  assertEqual(doc.querySelector('#followup-card .fu-q').textContent, Q1, 'first follow-up shows question 1');
+
+  answerFollowUp(doc, 'Sedona and Dad were there');
+  await waitFor(() => {
+    const c = doc.getElementById('followup-card');
+    return c && c.querySelector('.fu-q').textContent === Q2 ? c : null;
+  }, 'second follow-up card');
+
+  let entry = riverEntry();
+  assertEqual(entry.text, 'I loved the park today', 'entry text untouched by follow-up answer');
+  assertEqual(entry.followUps, [{ q: Q1, a: 'Sedona and Dad were there' }], 'answer 1 stored as its own Q&A pair');
+
+  answerFollowUp(doc, 'Happy and a little sweaty');
+  await waitFor(() => {
+    const c = doc.getElementById('followup-card');
+    return c && c.querySelector('.fu-q').textContent === Q3 ? c : null;
+  }, 'third follow-up card');
+
+  entry = riverEntry();
+  assertEqual(entry.followUps.map(f => f.q), [Q1, Q2], 'each question keeps its own slot, in order');
+  assertEqual(entry.followUps[1], { q: Q2, a: 'Happy and a little sweaty' }, 'answer 2 attached to question 2');
+  assert(new Set(entry.followUps.map(f => f.q)).size === entry.followUps.length, 'no duplicate questions stored');
+
+  answerFollowUp(doc, 'Because we laughed the whole time');
+  await sleep(2500); // fly animation + would-be fetch
+  entry = riverEntry();
+  assertEqual(entry.followUps.length, 3, 'three answered follow-ups stored');
+  assert(!doc.getElementById('followup-card'), 'no fourth question after MAX_FOLLOWUPS');
+  assertEqual(win.__claudeCalls, 3, 'Claude asked exactly 3 times (cap respected)');
+
+  // one-glowing-thought-per-night must still newline-join plain captures
+  await typeAndSave(doc, 'Also the sunset was pretty');
+  await sleep(1500);
+  entry = riverEntry();
+  assertEqual(entry.text, 'I loved the park today\nAlso the sunset was pretty', 'plain capture still joins tonight\'s thought');
+  assertEqual(entry.followUps.length, 3, 'plain capture does not touch follow-up pairs');
+
+  // Q&A pairs render wherever entries show — check the admin list (no PINs set, so it opens)
+  doc.getElementById('back-btn').click();
+  doc.getElementById('admin-btn').click();
+  await waitFor(() => doc.querySelector('#admin-list .entry-followups'), 'admin list Q&A block');
+  const qs = [...doc.querySelectorAll('#admin-list .entry-followups .efu-q')].map(el => el.textContent);
+  assertEqual(qs, [Q1, Q2, Q3], 'admin view renders each question with its own answer');
+}
+
+/* ---- scenario 2: a repeated question never creates a second slot ---- */
+async function scenarioRepeatedQuestion() {
+  const QA = 'What made you smile the most?';
+  const { doc, win } = await bootApp([QA, QA, QA]);
+
+  clickKid(doc, 'River');
+  await typeAndSave(doc, 'Pancakes for dinner');
+  await dismissRevealsUntilFollowUp(doc);
+  answerFollowUp(doc, 'The whipped cream tower');
+  await sleep(2500); // second ask returns the same question → card must be skipped
+
+  const entry = riverEntry();
+  assertEqual(entry.followUps, [{ q: QA, a: 'The whipped cream tower' }], 'one unique question → exactly one answer');
+  assert(!doc.getElementById('followup-card'), 'duplicate question from the model is not shown again');
+  assertEqual(win.__claudeCalls, 2, 'model was consulted again but its repeat was rejected');
+}
+
+(async () => {
+  const snapshot = snapshotStore();
+  try {
+    await scenarioUniquePairs();
+    await scenarioRepeatedQuestion();
+  } catch (e) {
+    report(false, 'test run crashed', e.message);
+  } finally {
+    restoreStore(snapshot);
+    document.getElementById('stage').src = 'about:blank';
+  }
+  summary.textContent = failures === 0 ? 'PASS — all tests green ✨' : 'FAIL — ' + failures + ' failing';
+  document.title = failures === 0 ? 'PASS' : 'FAIL';
+  window.__testDone = true;
+  window.__failures = failures;
+})();
+</script>
+</body>
+</html>

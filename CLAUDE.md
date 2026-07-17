@@ -12,13 +12,15 @@ Wonder Jar is a family gratitude-journal PWA for the Ortiz family: kids speak or
 
 ## Development
 
-There is no build step, package manager, linter, or test suite. To run locally:
+There is no build step, package manager, or linter. To run locally:
 
 ```bash
 python3 -m http.server 8000   # any static server works
 ```
 
 Serve over http(s) — service worker and PWA features don't work from `file://`. Verify changes by exercising the app in a browser.
+
+`test.html` is a zero-dependency browser test harness: it loads the real app in an iframe with the Anthropic API stubbed, drives the UI, and asserts on stored records (currently covering the follow-up Q&A flow). Open `http://localhost:8000/test.html` and check for "PASS" — it snapshots and restores real `wonderjar_*` localStorage around the run. It can also be driven headless (`document.title` becomes `PASS`/`FAIL`, `window.__testDone`/`window.__failures` are set). Extend it when changing entry-saving behavior.
 
 When shipping changes to cached assets, bump the `CACHE` version constant in `sw.js` (`wonderjar-v2` → `wonderjar-v3`) so installed clients pick up the new files.
 
@@ -28,7 +30,7 @@ When shipping changes to cached assets, bump the `CACHE` version constant in `sw
 
 All persistent state lives in a single object `data = { records: {} }`, keyed by record id. Every record carries `id`, `type`, `updatedAt` (epoch ms), and optionally `deleted: true`. Record types:
 
-- `entry` — a night's thought (`kidId`, `text`, `prompt`, `date`); id `entry_<uid>`
+- `entry` — a night's thought (`kidId`, `text`, `prompt`, `date`); id `entry_<uid>`. Follow-up answers live on the entry as `followUps: [{ q, a }]` — one pair per unique question, never concatenated into `text` (use `followUpsFor`/`entryFullText` helpers).
 - `glimmer`, `badge` — earned rewards per kid; deterministic ids like `badge_<kidId>_<badgeId>`
 - `wishspent` — a "Wonder Wish" spent to patch a missed streak night
 - `reaction` — a parent/sibling heart (+ optional note) on an entry
@@ -59,6 +61,7 @@ Four `<section class="screen">`s toggled by `show(screenId)`: `screen-profiles` 
 ### Key behaviors to preserve
 
 - **One glowing thought per night per kid**: saving when today's entry exists appends to it (newline-joined) rather than creating a second entry. Glimmer/badge/follow-up rewards only fire for genuinely new entries (`isNew`).
+- **Follow-up Q&A**: answering a follow-up stores a `{ q, a }` pair on the entry (via `pendingFollowUp`), then invites one more question — capped at `MAX_FOLLOWUPS = 3` per night, and a question the model repeats is silently skipped so each unique question keeps exactly one answer.
 - **Streaks** (`statsFor`): today gets grace if not yet filled; an available Wonder Wish (earned every `WISH_EVERY = 7` entries) is auto-spent to patch exactly one missing night inside a chain, writing a `wishspent` record.
 - **Celebration queue**: reveals (glimmer, badge, reaction, follow-up) show one at a time via `queueCeleb`/`nextCeleb` — don't stack overlays directly.
 - **PINs**: each person can have a 4-digit PIN (synced record). A parent PIN opens any kid's jar; `requireParentPin` gates the admin view; `trust_device` (local, set in Settings) bypasses all PIN prompts on that device.

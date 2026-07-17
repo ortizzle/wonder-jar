@@ -378,6 +378,9 @@
     text-align: left;
   }
   .entry-text { font-size: 15px; font-weight: 700; line-height: 1.4; }
+  .entry-followups { margin-top: 6px; border-left: 2px solid rgba(184,169,245,.4); padding-left: 8px; display: grid; gap: 2px; }
+  .efu-q { font-size: 12px; color: var(--lavender); font-weight: 800; }
+  .efu-a { font-size: 14px; font-weight: 700; white-space: pre-line; }
   .entry-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .entry-actions { display: flex; gap: 8px; margin-top: 8px; }
   .entry-actions button { min-height: 44px; padding: 0 12px; border-radius: 10px; font-weight: 800; font-size: 13px; background: rgba(255,255,255,.08); color: var(--text-dim); }
@@ -479,6 +482,9 @@
     .pb-entry { margin-bottom: 14px; page-break-inside: avoid; }
     .pb-text { font-size: 15px; line-height: 1.5; }
     .pb-meta { font-size: 12px; color: #6b5d42; margin-top: 2px; }
+    .entry-followups { margin: 4px 0 0 12px; border-left: 2px solid #d9cba8; padding-left: 8px; }
+    .efu-q { font-size: 12px; color: #6b5d42; font-style: italic; margin-top: 4px; }
+    .efu-a { font-size: 14px; line-height: 1.5; white-space: pre-line; }
   }
 
   @media (max-height: 700px) {
@@ -966,6 +972,29 @@ function badgesFor(kidId) {
   return owned;
 }
 
+// follow-up Q&A pairs live on the entry as followUps: [{ q, a }] — one answer per unique question
+function followUpsFor(entry) { return Array.isArray(entry.followUps) ? entry.followUps : []; }
+function entryFullText(entry) {
+  const qa = followUpsFor(entry).map(f => f.q + ' ' + f.a).join('\n');
+  return qa ? entry.text + '\n' + qa : entry.text;
+}
+function makeFollowUpBlock(entry) {
+  const fus = followUpsFor(entry);
+  if (!fus.length) return null;
+  const wrap = document.createElement('div');
+  wrap.className = 'entry-followups';
+  for (const f of fus) {
+    const q = document.createElement('div');
+    q.className = 'efu-q';
+    q.textContent = f.q;
+    const a = document.createElement('div');
+    a.className = 'efu-a';
+    a.textContent = '“' + f.a + '”';
+    wrap.append(q, a);
+  }
+  return wrap;
+}
+
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + n);
@@ -1094,6 +1123,8 @@ function renderProfiles() {
 // ---------- journal ----------
 function enterJournal(kid) {
   currentKid = kid;
+  pendingFollowUp = null;
+  editingEntry = null;
   document.getElementById('who-avatar').textContent = personAvatar(kid);
   document.getElementById('who-name').textContent = kid.name;
   pickPrompt(false);
@@ -1303,8 +1334,8 @@ const celebQ = [];
 function queueCeleb(fn) { celebQ.push(fn); }
 function nextCeleb() { const fn = celebQ.shift(); if (fn) fn(); }
 
-let pendingAppend = null; // entry id being extended via a follow-up question
-let editingEntry = null;  // entry id being edited from the Thoughts list
+let pendingFollowUp = null; // { entryId, question } — the follow-up being answered
+let editingEntry = null;    // entry id being edited from the Thoughts list
 
 document.getElementById('save-btn').addEventListener('click', () => {
   const text = transcriptBox.value.trim();
@@ -1327,13 +1358,19 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
   let entryId;
   let isNew = false;
+  let answeredFollowUp = false;
   const todays = entriesFor(currentKid.id).find(e => e.date === AZ.today());
-  if (pendingAppend && data.records[pendingAppend]) {
-    entryId = pendingAppend;
+  if (pendingFollowUp && data.records[pendingFollowUp.entryId]) {
+    entryId = pendingFollowUp.entryId;
     const rec = data.records[entryId];
-    rec.text = rec.text + ' ' + text;
+    const q = pendingFollowUp.question;
+    rec.followUps = followUpsFor(rec);
+    const prev = rec.followUps.find(f => f.q === q);
+    if (prev) prev.a = prev.a + ' ' + text; // same question keeps one answer
+    else rec.followUps.push({ q, a: text });
     rec.updatedAt = Date.now();
-    pendingAppend = null;
+    pendingFollowUp = null;
+    answeredFollowUp = true;
   } else if (todays) {
     // one glowing thought per night — new captures join it
     entryId = todays.id;
@@ -1361,6 +1398,8 @@ document.getElementById('save-btn').addEventListener('click', () => {
       syncAfterChange();
       queueCeleb(() => { maybeFollowUp(entryId); });
       nextCeleb();
+    } else if (answeredFollowUp) {
+      maybeFollowUp(entryId); // a fresh question, different from the ones already answered
     }
   });
 
@@ -1629,7 +1668,9 @@ function makeEntryRow(entry, { own, onChanged }) {
     actions.append(heart, note);
   }
 
-  row.append(txt, meta, actions);
+  const fus = makeFollowUpBlock(entry);
+  if (fus) row.append(txt, fus, meta, actions);
+  else row.append(txt, meta, actions);
   return row;
 }
 
@@ -1930,7 +1971,7 @@ function showFollowUpCard(guide, question, entryId) {
   more.className = 'btn-big btn-save';
   more.textContent = SR ? '🎤 Tell more!' : '✏️ Tell more!';
   more.addEventListener('click', () => {
-    pendingAppend = entryId;
+    pendingFollowUp = { entryId, question };
     removeFollowUp();
     if (SR) startListening(); else showTyping();
   });
@@ -1939,24 +1980,33 @@ function showFollowUpCard(guide, question, entryId) {
   document.getElementById('capture-zone').prepend(card);
 }
 
+const MAX_FOLLOWUPS = 3; // questions per night — curiosity, not an interrogation
+
 async function maybeFollowUp(entryId) {
   if (!Store.get('anthropic_key')) return;
   const rec = data.records[entryId];
   if (!rec || rec.deleted) return;
+  const asked = followUpsFor(rec).map(f => f.q);
+  if (asked.length >= MAX_FOLLOWUPS) return;
   const owned = [...glimmersFor(currentKid.id)];
   const guideId = owned[Math.floor(Math.random() * owned.length)];
   const guide = GLIMMERS.find(g => g.id === guideId) || GLIMMERS[0];
   try {
     const q = await askClaude(
       'A child named ' + currentKid.name + ' just wrote this in their gratitude journal (the prompt was "' + rec.prompt + '"): "' + rec.text + '". ' +
-      'Reply with exactly ONE warm, curious follow-up question, under 15 words, that invites them to reflect a little deeper. Reply with only the question.',
+      (asked.length
+        ? 'They already answered these follow-ups:\n' + followUpsFor(rec).map(f => 'Q: ' + f.q + '\nA: ' + f.a).join('\n') + '\n'
+        : '') +
+      'Reply with exactly ONE warm, curious follow-up question, under 15 words, that invites them to reflect a little deeper' +
+      (asked.length ? ' and explores something different from every question already asked' : '') +
+      '. Reply with only the question.',
       {
-        system: 'You are a warm, curious creature living in a gratitude journal used by kids aged 9–12. Ask one genuine follow-up question that invites real reflection — about feelings, specific details, or why the moment mattered. Respect their intelligence: never babyish, never advice, never negative or scary.',
+        system: 'You are a warm, curious creature living in a gratitude journal used by kids aged 9–12. Ask one genuine follow-up question that invites real reflection — about feelings, specific details, or why the moment mattered. Never repeat a question they already answered. Respect their intelligence: never babyish, never advice, never negative or scary.',
         maxTokens: 60
       }
     );
     const clean = (q || '').trim().replace(/^["“]|["”]$/g, '');
-    if (clean && document.getElementById('screen-journal').classList.contains('active')) {
+    if (clean && !asked.includes(clean) && document.getElementById('screen-journal').classList.contains('active')) {
       showFollowUpCard(guide, clean, entryId);
     }
   } catch (e) { /* no key / offline / error — stay silent, app works without AI */ }
@@ -2017,7 +2067,7 @@ async function generateInsights(kind) {
       const es = entriesFor(person.id).filter(e => e.date >= cutoff);
       const s = statsFor(person.id);
       lines.push(person.name + ' — current streak ' + s.currentStreak + ', ' + s.totalEntries + ' entries ever, ' + es.length + ' in the last 30 days:');
-      for (const e of es.slice(0, 40)) lines.push('  [' + e.date + '] ' + e.text);
+      for (const e of es.slice(0, 40)) lines.push('  [' + e.date + '] ' + entryFullText(e));
       lines.push('');
     }
     system = 'You help parents gently understand their children\'s gratitude journals. Be warm, specific, and brief. Celebrate; never diagnose or alarm. If something seems worth a caring conversation, suggest it softly. Plain text only, no markdown.';
@@ -2031,7 +2081,7 @@ async function generateInsights(kind) {
     const s = statsFor(currentKid.id);
     system = 'You are a magical, kind creature who lives in a gratitude jar, speaking directly to a smart kid aged 9–12. Celebrate the specific things they wrote and thoughtfully reflect their week\'s themes back to them — no baby talk. Under 90 words. Plain text, a couple of emoji are okay. Only celebrate — never criticize.';
     prompt = 'Here is what ' + currentKid.name + ' put in their gratitude jar this week (their streak is ' + s.currentStreak + ' nights):\n' +
-      es.map(e => '- ' + e.text).join('\n') +
+      es.map(e => '- ' + entryFullText(e)).join('\n') +
       '\n\nTell ' + currentKid.name + ' what their jar glowed about this week, cheer for their streak, and end with one tiny wonder-question to think about tomorrow.';
   }
 
@@ -2101,7 +2151,9 @@ function makeAdminEntryRow(entry) {
   });
   actions.appendChild(del);
 
-  row.append(header, txt, meta, actions);
+  const fus = makeFollowUpBlock(entry);
+  if (fus) row.append(header, txt, fus, meta, actions);
+  else row.append(header, txt, meta, actions);
   return row;
 }
 
@@ -2114,7 +2166,7 @@ function renderAdminList() {
 
   let entries = Object.values(data.records).filter(r => r.type === 'entry' && !r.deleted);
   if (personFilter !== 'all') entries = entries.filter(e => e.kidId === personFilter);
-  if (q) entries = entries.filter(e => e.text.toLowerCase().includes(q));
+  if (q) entries = entries.filter(e => entryFullText(e).toLowerCase().includes(q));
   entries.sort((a, b) => sortOrder === 'oldest' ? a.updatedAt - b.updatedAt : b.updatedAt - a.updatedAt);
 
   if (!entries.length) {
@@ -2245,12 +2297,14 @@ function printKeepsake(personId) {
     const t = document.createElement('div');
     t.className = 'pb-text';
     t.textContent = '“' + e.text + '”';
+    const fus = makeFollowUpBlock(e);
     const meta = document.createElement('div');
     meta.className = 'pb-meta';
     const hearts = reactionsForEntry(e.id);
     meta.textContent = '— ' + personName(e.kidId) + ', ' + AZ.pretty(e.date)
       + (hearts.length ? '   ' + hearts.map(h => '♥ ' + personName(h.from) + (h.note ? ': “' + h.note + '”' : '')).join('   ') : '');
-    div.append(t, meta);
+    if (fus) div.append(t, fus, meta);
+    else div.append(t, meta);
     book.appendChild(div);
   }
   window.print();
