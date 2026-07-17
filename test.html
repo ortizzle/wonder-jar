@@ -208,12 +208,14 @@ async function scenarioUniquePairs() {
   assertEqual(entry.text, 'I loved the park today\nAlso the sunset was pretty', 'plain capture still joins tonight\'s thought');
   assertEqual(entry.followUps.length, 3, 'plain capture does not touch follow-up pairs');
 
-  // Q&A pairs render wherever entries show — check the admin list (no PINs set, so it opens)
-  doc.getElementById('back-btn').click();
-  doc.getElementById('admin-btn').click();
-  await waitFor(() => doc.querySelector('#admin-list .entry-followups'), 'admin list Q&A block');
-  const qs = [...doc.querySelectorAll('#admin-list .entry-followups .efu-q')].map(el => el.textContent);
-  assertEqual(qs, [Q1, Q2, Q3], 'admin view renders each question with its own answer');
+  // Q&A pairs render wherever entries show — check the Thoughts tab of the treasures modal
+  doc.getElementById('collection-btn').click();
+  const thoughtsTab = await waitFor(() => [...doc.querySelectorAll('.tab-btn')]
+    .find(b => b.textContent === '📖'), 'treasures modal tabs');
+  thoughtsTab.click();
+  await waitFor(() => doc.querySelector('#tab-content .entry-followups'), 'thoughts Q&A block');
+  const qs = [...doc.querySelectorAll('#tab-content .entry-followups .efu-q')].map(el => el.textContent);
+  assertEqual(qs, [Q1, Q2, Q3], 'thoughts list renders each question with its own answer');
 }
 
 /* ---- scenario 2: a repeated question never creates a second slot ---- */
@@ -258,17 +260,22 @@ async function scenarioPhoneOwnership() {
   await waitFor(() => doc.querySelector('.pin-input'), 'pin modal for borrowed phone');
   assert(!doc.getElementById('screen-journal').classList.contains('active'),
     "Sedona's jar still asks for her code on River's phone");
+  doc.querySelector('.modal-overlay .btn-secondary').click(); // never mind
 
-  // a parent's phone opens every jar and the grown-up view, no codes at all
+  doc.getElementById('settings-btn').click();
+  await waitFor(() => doc.querySelector('.pin-input'), 'settings pin modal on kid phone');
+  assert(!doc.querySelector('.settings-box'), "grown-up stuff still asks for a parent code on River's phone");
+
+  // a parent's phone opens every jar and grown-up stuff, no codes at all
   ({ doc } = await bootApp(['unused'], { phone_owner: 'dad', data: PINS }));
   assert(!doc.querySelector('.owner-btn'), 'picker does not reappear once the phone knows its person');
   clickKid(doc, 'Sedona');
   await waitFor(() => doc.getElementById('screen-journal').classList.contains('active'), 'kid jar on parent phone');
   assert(!doc.querySelector('.pin-input'), "a parent's phone opens a kid's jar with no code");
   doc.getElementById('back-btn').click();
-  doc.getElementById('admin-btn').click();
-  await waitFor(() => doc.getElementById('screen-admin').classList.contains('active'), 'admin on parent phone');
-  assert(!doc.querySelector('.pin-input'), "a parent's phone opens the grown-up view with no code");
+  doc.getElementById('settings-btn').click();
+  await waitFor(() => doc.querySelector('.settings-box'), 'settings on parent phone');
+  assert(!doc.querySelector('.pin-input'), "a parent's phone opens grown-up stuff with no code");
 }
 
 (async () => {
