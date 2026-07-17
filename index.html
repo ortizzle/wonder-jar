@@ -280,6 +280,14 @@
   .btn-primary { background: linear-gradient(135deg, #ffd66b, #ff9d3c); color: #4a2c05; }
   .btn-secondary { background: rgba(255,255,255,.1); color: var(--text-dim); }
 
+  .owner-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .owner-btn {
+    min-height: 54px; border-radius: 16px; font-size: 16px; font-weight: 800;
+    background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.12); color: var(--text);
+  }
+  .owner-btn:active { transform: scale(.97); }
+  .owner-shared { grid-column: 1 / -1; background: rgba(184,169,245,.15); }
+
   .reveal-box { position: relative; overflow: visible; }
   .reveal-burst {
     position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
@@ -386,6 +394,9 @@
     text-align: left;
   }
   .entry-text { font-size: 15px; font-weight: 700; line-height: 1.4; }
+  .entry-followups { margin-top: 6px; border-left: 2px solid rgba(184,169,245,.4); padding-left: 8px; display: grid; gap: 2px; }
+  .efu-q { font-size: 12px; color: var(--lavender); font-weight: 800; }
+  .efu-a { font-size: 14px; font-weight: 700; white-space: pre-line; }
   .entry-meta { font-size: 12px; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .entry-actions { display: flex; gap: 8px; margin-top: 8px; }
   .entry-actions button { min-height: 44px; padding: 0 12px; border-radius: 10px; font-weight: 800; font-size: 13px; background: rgba(255,255,255,.08); color: var(--text-dim); }
@@ -511,6 +522,9 @@
     .pb-entry { margin-bottom: 14px; page-break-inside: avoid; }
     .pb-text { font-size: 15px; line-height: 1.5; }
     .pb-meta { font-size: 12px; color: #6b5d42; margin-top: 2px; }
+    .entry-followups { margin: 4px 0 0 12px; border-left: 2px solid #d9cba8; padding-left: 8px; }
+    .efu-q { font-size: 12px; color: #6b5d42; font-style: italic; margin-top: 4px; }
+    .efu-a { font-size: 14px; line-height: 1.5; white-space: pre-line; }
   }
 
   @media (max-height: 700px) {
@@ -861,8 +875,51 @@ function showPinModal({ title, validate, onSuccess }) {
 
 function trustDevice() { return Store.get('trust_device', false); }
 
+// each phone remembers its person (device-local, like trust_device) — so your own
+// jar opens right up with no code. Codes only appear on somebody else's phone.
+function phoneOwner() { return Store.get('phone_owner', ''); }
+function ownerIsParent() {
+  const p = personById(phoneOwner());
+  return !!(p && !p.kid);
+}
+
+function showOwnerPicker() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h = document.createElement('h3');
+  h.textContent = '📱 Whose phone is this?';
+  const p = document.createElement('p');
+  p.textContent = 'Your own jar will open right up on your own phone — no secret code needed. You can change this later in ⚙️ Grown-up stuff.';
+  box.append(h, p);
+
+  const grid = document.createElement('div');
+  grid.className = 'owner-grid';
+  const choose = (id, msg) => { Store.set('phone_owner', id); overlay.remove(); toast(msg); };
+  for (const person of PEOPLE) {
+    const b = document.createElement('button');
+    b.className = 'owner-btn';
+    b.textContent = personAvatar(person) + ' ' + person.name;
+    b.addEventListener('click', () => choose(person.id, 'This is ' + person.name + '\'s phone now! ✨'));
+    grid.appendChild(b);
+  }
+  const shared = document.createElement('button');
+  shared.className = 'owner-btn owner-shared';
+  shared.textContent = '👨‍👩‍👧‍👦 We all share it';
+  shared.addEventListener('click', () => choose('family', 'A jar for the whole family! 💛'));
+  grid.appendChild(shared);
+  box.appendChild(grid);
+
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); }); // "not now" — asks again next launch
+  document.body.appendChild(overlay);
+}
+
 function requirePin(person, onSuccess) {
-  if (trustDevice()) { onSuccess(); return; }
+  // your phone knows you; a parent's phone opens every jar (like the parent code does)
+  if (trustDevice() || phoneOwner() === person.id || ownerIsParent()) { onSuccess(); return; }
   const pin = pinFor(person.id);
   if (!pin) { onSuccess(); return; }
   showPinModal({
@@ -874,7 +931,7 @@ function requirePin(person, onSuccess) {
 }
 
 function requireParentPin(onSuccess) {
-  if (trustDevice()) { onSuccess(); return; }
+  if (trustDevice() || ownerIsParent()) { onSuccess(); return; }
   const pins = parentPins();
   if (!pins.length) { onSuccess(); return; }
   showPinModal({ title: '🔒 Grown-ups only', validate: (v) => pins.includes(v), onSuccess });
@@ -1018,6 +1075,29 @@ function badgesFor(kidId) {
   return owned;
 }
 
+// follow-up Q&A pairs live on the entry as followUps: [{ q, a }] — one answer per unique question
+function followUpsFor(entry) { return Array.isArray(entry.followUps) ? entry.followUps : []; }
+function entryFullText(entry) {
+  const qa = followUpsFor(entry).map(f => f.q + ' ' + f.a).join('\n');
+  return qa ? entry.text + '\n' + qa : entry.text;
+}
+function makeFollowUpBlock(entry) {
+  const fus = followUpsFor(entry);
+  if (!fus.length) return null;
+  const wrap = document.createElement('div');
+  wrap.className = 'entry-followups';
+  for (const f of fus) {
+    const q = document.createElement('div');
+    q.className = 'efu-q';
+    q.textContent = f.q;
+    const a = document.createElement('div');
+    a.className = 'efu-a';
+    a.textContent = '“' + f.a + '”';
+    wrap.append(q, a);
+  }
+  return wrap;
+}
+
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + n);
@@ -1146,6 +1226,8 @@ function renderProfiles() {
 // ---------- journal ----------
 function enterJournal(kid) {
   currentKid = kid;
+  pendingFollowUp = null;
+  editingEntry = null;
   document.getElementById('who-avatar').textContent = personAvatar(kid);
   document.getElementById('who-name').textContent = kid.name;
   pickPrompt(false);
@@ -1413,8 +1495,8 @@ const celebQ = [];
 function queueCeleb(fn) { celebQ.push(fn); }
 function nextCeleb() { const fn = celebQ.shift(); if (fn) fn(); }
 
-let pendingAppend = null; // entry id being extended via a follow-up question
-let editingEntry = null;  // entry id being edited from the Thoughts list
+let pendingFollowUp = null; // { entryId, question } — the follow-up being answered
+let editingEntry = null;    // entry id being edited from the Thoughts list
 
 document.getElementById('save-btn').addEventListener('click', () => {
   const text = transcriptBox.value.trim();
@@ -1437,13 +1519,19 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
   let entryId;
   let isNew = false;
+  let answeredFollowUp = false;
   const todays = entriesFor(currentKid.id).find(e => e.date === AZ.today());
-  if (pendingAppend && data.records[pendingAppend]) {
-    entryId = pendingAppend;
+  if (pendingFollowUp && data.records[pendingFollowUp.entryId]) {
+    entryId = pendingFollowUp.entryId;
     const rec = data.records[entryId];
-    rec.text = rec.text + ' ' + text;
+    const q = pendingFollowUp.question;
+    rec.followUps = followUpsFor(rec);
+    const prev = rec.followUps.find(f => f.q === q);
+    if (prev) prev.a = prev.a + ' ' + text; // same question keeps one answer
+    else rec.followUps.push({ q, a: text });
     rec.updatedAt = Date.now();
-    pendingAppend = null;
+    pendingFollowUp = null;
+    answeredFollowUp = true;
   } else if (todays) {
     // one glowing thought per night — new captures join it
     entryId = todays.id;
@@ -1471,6 +1559,8 @@ document.getElementById('save-btn').addEventListener('click', () => {
       syncAfterChange();
       queueCeleb(() => { maybeFollowUp(entryId); });
       nextCeleb();
+    } else if (answeredFollowUp) {
+      maybeFollowUp(entryId); // a fresh question, different from the ones already answered
     }
   });
 
@@ -1745,7 +1835,9 @@ function makeEntryRow(entry, { own, onChanged }) {
     actions.append(heart, note);
   }
 
-  row.append(txt, meta, actions);
+  const fus = makeFollowUpBlock(entry);
+  if (fus) row.append(txt, fus, meta, actions);
+  else row.append(txt, meta, actions);
   return row;
 }
 
@@ -2057,7 +2149,7 @@ function showFollowUpCard(guide, question, entryId) {
   more.className = 'btn-big btn-save';
   more.textContent = SR ? '🎤 Tell more!' : '✏️ Tell more!';
   more.addEventListener('click', () => {
-    pendingAppend = entryId;
+    pendingFollowUp = { entryId, question };
     removeFollowUp();
     if (SR) startListening(); else showTyping();
   });
@@ -2066,10 +2158,14 @@ function showFollowUpCard(guide, question, entryId) {
   document.getElementById('capture-zone').prepend(card);
 }
 
+const MAX_FOLLOWUPS = 3; // questions per night — curiosity, not an interrogation
+
 async function maybeFollowUp(entryId) {
   if (!Store.get('anthropic_key')) return;
   const rec = data.records[entryId];
   if (!rec || rec.deleted) return;
+  const asked = followUpsFor(rec).map(f => f.q);
+  if (asked.length >= MAX_FOLLOWUPS) return;
   const owned = [...glimmersFor(currentKid.id)];
   const guideId = owned[Math.floor(Math.random() * owned.length)];
   const guide = GLIMMERS.find(g => g.id === guideId) || GLIMMERS[0];
@@ -2077,14 +2173,19 @@ async function maybeFollowUp(entryId) {
     const promptContext = rec.prompt ? ' (the prompt was "' + rec.prompt + '")' : '';
     const q = await askClaude(
       'A child named ' + currentKid.name + ' just wrote this in their gratitude journal' + promptContext + ': "' + rec.text + '". ' +
-      'Reply with exactly ONE warm, curious follow-up question, under 15 words, that invites them to reflect a little deeper. Reply with only the question.',
+      (asked.length
+        ? 'They already answered these follow-ups:\n' + followUpsFor(rec).map(f => 'Q: ' + f.q + '\nA: ' + f.a).join('\n') + '\n'
+        : '') +
+      'Reply with exactly ONE warm, curious follow-up question, under 15 words, that invites them to reflect a little deeper' +
+      (asked.length ? ' and explores something different from every question already asked' : '') +
+      '. Reply with only the question.',
       {
-        system: 'You are a warm, curious creature living in a gratitude journal used by kids aged 9–12. Ask one genuine follow-up question that invites real reflection — about feelings, specific details, or why the moment mattered. Respect their intelligence: never babyish, never advice, never negative or scary.',
+        system: 'You are a warm, curious creature living in a gratitude journal used by kids aged 9–12. Ask one genuine follow-up question that invites real reflection — about feelings, specific details, or why the moment mattered. Never repeat a question they already answered. Respect their intelligence: never babyish, never advice, never negative or scary.',
         maxTokens: 60
       }
     );
     const clean = (q || '').trim().replace(/^["“]|["”]$/g, '');
-    if (clean && document.getElementById('screen-journal').classList.contains('active')) {
+    if (clean && !asked.includes(clean) && document.getElementById('screen-journal').classList.contains('active')) {
       showFollowUpCard(guide, clean, entryId);
     }
   } catch (e) { /* no key / offline / error — stay silent, app works without AI */ }
@@ -2145,7 +2246,7 @@ async function generateInsights(kind) {
       const es = entriesFor(person.id).filter(e => e.date >= cutoff);
       const s = statsFor(person.id);
       lines.push(person.name + ' — current streak ' + s.currentStreak + ', ' + s.totalEntries + ' entries ever, ' + es.length + ' in the last 30 days:');
-      for (const e of es.slice(0, 40)) lines.push('  [' + e.date + '] ' + e.text);
+      for (const e of es.slice(0, 40)) lines.push('  [' + e.date + '] ' + entryFullText(e));
       lines.push('');
     }
     system = 'You help parents gently understand their children\'s gratitude journals. Be warm, specific, and brief. Celebrate; never diagnose or alarm. If something seems worth a caring conversation, suggest it softly. Plain text only, no markdown.';
@@ -2159,7 +2260,7 @@ async function generateInsights(kind) {
     const s = statsFor(currentKid.id);
     system = 'You are a magical, kind creature who lives in a gratitude jar, speaking directly to a smart kid aged 9–12. Celebrate the specific things they wrote and thoughtfully reflect their week\'s themes back to them — no baby talk. Under 90 words. Plain text, a couple of emoji are okay. Only celebrate — never criticize.';
     prompt = 'Here is what ' + currentKid.name + ' put in their gratitude jar this week (their streak is ' + s.currentStreak + ' nights):\n' +
-      es.map(e => '- ' + e.text).join('\n') +
+      es.map(e => '- ' + entryFullText(e)).join('\n') +
       '\n\nTell ' + currentKid.name + ' what their jar glowed about this week, cheer for their streak, and end with one tiny wonder-question to think about tomorrow.';
   }
 
@@ -2215,6 +2316,9 @@ function makeAdminEntryRow(entry) {
   txt.textContent = '“' + entry.text + '”';
   parts.push(txt);
 
+  const fus = makeFollowUpBlock(entry);
+  if (fus) parts.push(fus);
+
   const meta = document.createElement('div');
   meta.className = 'entry-meta';
   const hearts = reactionsForEntry(entry.id);
@@ -2253,7 +2357,7 @@ function renderAdminList() {
 
   let entries = Object.values(data.records).filter(r => r.type === 'entry' && !r.deleted);
   if (personFilter !== 'all') entries = entries.filter(e => e.kidId === personFilter);
-  if (q) entries = entries.filter(e => e.text.toLowerCase().includes(q));
+  if (q) entries = entries.filter(e => entryFullText(e).toLowerCase().includes(q));
   entries.sort((a, b) => sortOrder === 'oldest' ? a.updatedAt - b.updatedAt : b.updatedAt - a.updatedAt);
 
   if (!entries.length) {
@@ -2867,12 +2971,14 @@ function printKeepsake(personId) {
     const t = document.createElement('div');
     t.className = 'pb-text';
     t.textContent = '“' + e.text + '”';
+    const fus = makeFollowUpBlock(e);
     const meta = document.createElement('div');
     meta.className = 'pb-meta';
     const hearts = reactionsForEntry(e.id);
     meta.textContent = '— ' + personName(e.kidId) + ', ' + AZ.pretty(e.date)
       + (hearts.length ? '   ' + hearts.map(h => '♥ ' + personName(h.from) + (h.note ? ': “' + h.note + '”' : '')).join('   ') : '');
-    div.append(t, meta);
+    if (fus) div.append(t, fus, meta);
+    else div.append(t, meta);
     book.appendChild(div);
   }
   window.print();
@@ -3123,10 +3229,32 @@ function openSettings() {
     toast('Codes saved 🔒');
   });
   pins.appendChild(pinBtn);
-  makeNote(pins, 'A courtesy lock for sibling privacy, not encryption. Your parent code also opens the girls\' jars and this settings screen. Codes sync to every phone. "Clear" empties a code here — tap Save codes to make it stick (locked-out family member can then get back in with no code).');
+  makeNote(pins, 'Codes are only asked on somebody else\'s phone — each phone knows its own person (see "This device" below). A courtesy lock for sibling privacy, not encryption. Your parent code also opens the girls\' jars and this settings screen. Codes sync to every phone. "Clear" empties a code here — tap Save codes to make it stick.');
 
-  // this device (admin bypass)
+  // this device (owner + admin bypass)
   const device = makeSection(box, 'This device');
+  const ownSel = document.createElement('select');
+  ownSel.className = 'text-input';
+  const ownOpts = [
+    ...PEOPLE.map(p => ({ value: p.id, label: personAvatar(p) + ' ' + p.name + '\'s phone' })),
+    { value: 'family', label: '👨‍👩‍👧‍👦 We all share it' }
+  ];
+  if (!phoneOwner()) ownOpts.unshift({ value: '', label: '❓ Nobody picked yet' });
+  for (const o of ownOpts) {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    ownSel.appendChild(opt);
+  }
+  ownSel.value = phoneOwner();
+  ownSel.addEventListener('change', () => {
+    if (!ownSel.value) return;
+    Store.set('phone_owner', ownSel.value);
+    const p = personById(ownSel.value);
+    toast(p ? 'This is ' + p.name + '\'s phone now! ✨' : 'A jar for the whole family! 💛');
+  });
+  device.appendChild(ownSel);
+  makeNote(device, 'Whoever this phone belongs to skips their own code here. A parent\'s phone opens every jar and this screen with no codes at all.');
   const toggleRow = document.createElement('div');
   toggleRow.className = 'toggle-row';
   const toggleId = 'trust-device-toggle';
@@ -3232,6 +3360,7 @@ document.getElementById('admin-search').addEventListener('input', renderAdminLis
 
 // ---------- init ----------
 renderProfiles();
+if (!phoneOwner()) showOwnerPicker();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
