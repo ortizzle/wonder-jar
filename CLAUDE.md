@@ -48,7 +48,7 @@ Rules that follow from this design:
 
 ### Local storage split
 
-`Store` wraps localStorage with the `wonderjar_` prefix. **Device-local** keys: `data` (the record cache), `gist_token`, `gist_id`, `anthropic_key`, `trust_device`, `seen_reactions_<kid>`. Anything that should follow the family across phones (avatars, tints, PINs) goes in **synced records**, not bare Store keys.
+`Store` wraps localStorage with the `wonderjar_` prefix. **Device-local** keys: `data` (the record cache), `gist_token`, `gist_id`, `anthropic_key`, `trust_device`, `phone_owner`, `seen_reactions_<kid>`. Anything that should follow the family across phones (avatars, tints, PINs) goes in **synced records**, not bare Store keys.
 
 ### Time: Arizona is canonical
 
@@ -64,7 +64,7 @@ Four `<section class="screen">`s toggled by `show(screenId)`: `screen-profiles` 
 - **Follow-up Q&A**: answering a follow-up stores a `{ q, a }` pair on the entry (via `pendingFollowUp`), then invites one more question — capped at `MAX_FOLLOWUPS = 3` per night, and a question the model repeats is silently skipped so each unique question keeps exactly one answer.
 - **Streaks** (`statsFor`): today gets grace if not yet filled; an available Wonder Wish (earned every `WISH_EVERY = 7` entries) is auto-spent to patch exactly one missing night inside a chain, writing a `wishspent` record.
 - **Celebration queue**: reveals (glimmer, badge, reaction, follow-up) show one at a time via `queueCeleb`/`nextCeleb` — don't stack overlays directly.
-- **PINs**: each person can have a 4-digit PIN (synced record). A parent PIN opens any kid's jar; `requireParentPin` gates the admin view; `trust_device` (local, set in Settings) bypasses all PIN prompts on that device.
+- **Phone ownership**: each device remembers whose it is (`phone_owner`, local — a person id or `'family'`), asked once at first launch via `showOwnerPicker` and changeable in Settings. The owner's own jar opens with no code; a parent-owned phone opens every jar and the admin view. PINs (4-digit synced records) are the fallback for borrowed/shared phones: a parent PIN opens any kid's jar, `requireParentPin` gates the admin view, and `trust_device` (local) bypasses every prompt.
 - **Reminders**: the page pushes `lastEntryByKid` to the service worker (`updateSWMeta` → postMessage → IndexedDB `wonderjar-sw`), and `sw.js` nudges via periodic sync only after 4pm Arizona time.
 
 ## Conventions

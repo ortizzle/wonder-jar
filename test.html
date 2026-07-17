@@ -81,9 +81,13 @@ function restoreStore(snap) {
 }
 
 /* ---- boot the real app in the iframe with stubs injected before its script ---- */
-async function bootApp(questions) {
+async function bootApp(questions, store = {}) {
   wipeStore();
-  localStorage.setItem('wonderjar_anthropic_key', JSON.stringify('test-key'));
+  // pass null to leave a key unset (e.g. phone_owner: null → first-launch picker shows)
+  const seed = { anthropic_key: 'test-key', phone_owner: 'family', ...store };
+  for (const [k, v] of Object.entries(seed)) {
+    if (v !== null) localStorage.setItem('wonderjar_' + k, JSON.stringify(v));
+  }
 
   // external font stylesheets block script execution while pending — tests must run offline
   const html = (await (await fetch('index.html')).text())
@@ -229,11 +233,50 @@ async function scenarioRepeatedQuestion() {
   assertEqual(win.__claudeCalls, 2, 'model was consulted again but its repeat was rejected');
 }
 
+/* ---- scenario 3: each phone knows its person — codes only on somebody else's phone ---- */
+async function scenarioPhoneOwnership() {
+  const PINS = { records: {
+    pin_river:  { id: 'pin_river',  type: 'pin', personId: 'river',  pin: '1111', updatedAt: 1 },
+    pin_sedona: { id: 'pin_sedona', type: 'pin', personId: 'sedona', pin: '2222', updatedAt: 1 },
+    pin_dad:    { id: 'pin_dad',    type: 'pin', personId: 'dad',    pin: '9999', updatedAt: 1 }
+  } };
+
+  // fresh phone: nobody picked yet → the picker asks, and the choice sticks
+  let { doc } = await bootApp(['unused'], { phone_owner: null, data: PINS });
+  const riverBtn = await waitFor(() => [...doc.querySelectorAll('.owner-btn')]
+    .find(b => b.textContent.includes('River')), 'owner picker');
+  report(true, 'first launch asks whose phone this is');
+  riverBtn.click();
+  assertEqual(JSON.parse(localStorage.getItem('wonderjar_phone_owner')), 'river', 'the choice is remembered on this phone');
+
+  clickKid(doc, 'River');
+  await waitFor(() => doc.getElementById('screen-journal').classList.contains('active'), 'own jar opens');
+  assert(!doc.querySelector('.pin-input'), "River's jar opens with no code on River's phone");
+  doc.getElementById('back-btn').click();
+
+  clickKid(doc, 'Sedona');
+  await waitFor(() => doc.querySelector('.pin-input'), 'pin modal for borrowed phone');
+  assert(!doc.getElementById('screen-journal').classList.contains('active'),
+    "Sedona's jar still asks for her code on River's phone");
+
+  // a parent's phone opens every jar and the grown-up view, no codes at all
+  ({ doc } = await bootApp(['unused'], { phone_owner: 'dad', data: PINS }));
+  assert(!doc.querySelector('.owner-btn'), 'picker does not reappear once the phone knows its person');
+  clickKid(doc, 'Sedona');
+  await waitFor(() => doc.getElementById('screen-journal').classList.contains('active'), 'kid jar on parent phone');
+  assert(!doc.querySelector('.pin-input'), "a parent's phone opens a kid's jar with no code");
+  doc.getElementById('back-btn').click();
+  doc.getElementById('admin-btn').click();
+  await waitFor(() => doc.getElementById('screen-admin').classList.contains('active'), 'admin on parent phone');
+  assert(!doc.querySelector('.pin-input'), "a parent's phone opens the grown-up view with no code");
+}
+
 (async () => {
   const snapshot = snapshotStore();
   try {
     await scenarioUniquePairs();
     await scenarioRepeatedQuestion();
+    await scenarioPhoneOwnership();
   } catch (e) {
     report(false, 'test run crashed', e.message);
   } finally {

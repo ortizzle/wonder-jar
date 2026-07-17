@@ -272,6 +272,14 @@
   .btn-primary { background: linear-gradient(135deg, #ffd66b, #ff9d3c); color: #4a2c05; }
   .btn-secondary { background: rgba(255,255,255,.1); color: var(--text-dim); }
 
+  .owner-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+  .owner-btn {
+    min-height: 54px; border-radius: 16px; font-size: 16px; font-weight: 800;
+    background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.12); color: var(--text);
+  }
+  .owner-btn:active { transform: scale(.97); }
+  .owner-shared { grid-column: 1 / -1; background: rgba(184,169,245,.15); }
+
   .reveal-box { position: relative; overflow: visible; }
   .reveal-burst {
     position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
@@ -815,8 +823,51 @@ function showPinModal({ title, validate, onSuccess }) {
 
 function trustDevice() { return Store.get('trust_device', false); }
 
+// each phone remembers its person (device-local, like trust_device) — so your own
+// jar opens right up with no code. Codes only appear on somebody else's phone.
+function phoneOwner() { return Store.get('phone_owner', ''); }
+function ownerIsParent() {
+  const p = personById(phoneOwner());
+  return !!(p && !p.kid);
+}
+
+function showOwnerPicker() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const box = document.createElement('div');
+  box.className = 'modal-box';
+
+  const h = document.createElement('h3');
+  h.textContent = '📱 Whose phone is this?';
+  const p = document.createElement('p');
+  p.textContent = 'Your own jar will open right up on your own phone — no secret code needed. You can change this later in ⚙️ Grown-up stuff.';
+  box.append(h, p);
+
+  const grid = document.createElement('div');
+  grid.className = 'owner-grid';
+  const choose = (id, msg) => { Store.set('phone_owner', id); overlay.remove(); toast(msg); };
+  for (const person of PEOPLE) {
+    const b = document.createElement('button');
+    b.className = 'owner-btn';
+    b.textContent = personAvatar(person) + ' ' + person.name;
+    b.addEventListener('click', () => choose(person.id, 'This is ' + person.name + '\'s phone now! ✨'));
+    grid.appendChild(b);
+  }
+  const shared = document.createElement('button');
+  shared.className = 'owner-btn owner-shared';
+  shared.textContent = '👨‍👩‍👧‍👦 We all share it';
+  shared.addEventListener('click', () => choose('family', 'A jar for the whole family! 💛'));
+  grid.appendChild(shared);
+  box.appendChild(grid);
+
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); }); // "not now" — asks again next launch
+  document.body.appendChild(overlay);
+}
+
 function requirePin(person, onSuccess) {
-  if (trustDevice()) { onSuccess(); return; }
+  // your phone knows you; a parent's phone opens every jar (like the parent code does)
+  if (trustDevice() || phoneOwner() === person.id || ownerIsParent()) { onSuccess(); return; }
   const pin = pinFor(person.id);
   if (!pin) { onSuccess(); return; }
   showPinModal({
@@ -828,7 +879,7 @@ function requirePin(person, onSuccess) {
 }
 
 function requireParentPin(onSuccess) {
-  if (trustDevice()) { onSuccess(); return; }
+  if (trustDevice() || ownerIsParent()) { onSuccess(); return; }
   const pins = parentPins();
   if (!pins.length) { onSuccess(); return; }
   showPinModal({ title: '🔒 Grown-ups only', validate: (v) => pins.includes(v), onSuccess });
@@ -2555,10 +2606,32 @@ function openSettings() {
     toast('Codes saved 🔒');
   });
   pins.appendChild(pinBtn);
-  makeNote(pins, 'A courtesy lock for sibling privacy, not encryption. Your parent code also opens the girls\' jars and this settings screen. Codes sync to every phone. "Clear" empties a code here — tap Save codes to make it stick (locked-out family member can then get back in with no code).');
+  makeNote(pins, 'Codes are only asked on somebody else\'s phone — each phone knows its own person (see "This device" below). A courtesy lock for sibling privacy, not encryption. Your parent code also opens the girls\' jars and this settings screen. Codes sync to every phone. "Clear" empties a code here — tap Save codes to make it stick.');
 
-  // this device (admin bypass)
+  // this device (owner + admin bypass)
   const device = makeSection(box, 'This device');
+  const ownSel = document.createElement('select');
+  ownSel.className = 'text-input';
+  const ownOpts = [
+    ...PEOPLE.map(p => ({ value: p.id, label: personAvatar(p) + ' ' + p.name + '\'s phone' })),
+    { value: 'family', label: '👨‍👩‍👧‍👦 We all share it' }
+  ];
+  if (!phoneOwner()) ownOpts.unshift({ value: '', label: '❓ Nobody picked yet' });
+  for (const o of ownOpts) {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    ownSel.appendChild(opt);
+  }
+  ownSel.value = phoneOwner();
+  ownSel.addEventListener('change', () => {
+    if (!ownSel.value) return;
+    Store.set('phone_owner', ownSel.value);
+    const p = personById(ownSel.value);
+    toast(p ? 'This is ' + p.name + '\'s phone now! ✨' : 'A jar for the whole family! 💛');
+  });
+  device.appendChild(ownSel);
+  makeNote(device, 'Whoever this phone belongs to skips their own code here. A parent\'s phone opens every jar and this screen with no codes at all.');
   const toggleRow = document.createElement('div');
   toggleRow.className = 'toggle-row';
   const toggleId = 'trust-device-toggle';
@@ -2663,6 +2736,7 @@ document.getElementById('admin-search').addEventListener('input', renderAdminLis
 
 // ---------- init ----------
 renderProfiles();
+if (!phoneOwner()) showOwnerPicker();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
