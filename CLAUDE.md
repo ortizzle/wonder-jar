@@ -48,7 +48,7 @@ Rules that follow from this design:
 
 ### Local storage split
 
-`Store` wraps localStorage with the `wonderjar_` prefix. **Device-local** keys: `data` (the record cache), `gist_token`, `gist_id`, `anthropic_key`, `trust_device`, `phone_owner`, `seen_reactions_<kid>`. Anything that should follow the family across phones (avatars, tints, PINs) goes in **synced records**, not bare Store keys.
+`Store` wraps localStorage with the `wonderjar_` prefix. **Device-local** keys: `data` (the record cache), `gist_token`, `gist_id`, `anthropic_key`, `trust_device`, `phone_owner`, `haptics`, `game_high_*`, `seen_reactions_<kid>`. Anything that should follow the family across phones (avatars, tints, PINs) goes in **synced records**, not bare Store keys.
 
 ### Time: Arizona is canonical
 

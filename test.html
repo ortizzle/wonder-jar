@@ -278,12 +278,59 @@ async function scenarioPhoneOwnership() {
   assert(!doc.querySelector('.pin-input'), "a parent's phone opens grown-up stuff with no code");
 }
 
+/* ---- scenario 4: Star Blaster juice — score pops on contact, haptics option ---- */
+async function scenarioBlasterJuice() {
+  const { doc, win } = await bootApp(['unused']);
+
+  // record vibrations instead of vibrating the test machine
+  const buzzes = [];
+  try { Object.defineProperty(win.navigator, 'vibrate', { value: (p) => { buzzes.push(p); return true; } }); }
+  catch (e) { win.navigator.vibrate = (p) => { buzzes.push(p); return true; }; }
+
+  // one laser about to hit a 1-hp comet worth 3 points — drive the real tick
+  const state = (rocks, lasers) => ({
+    running: true, over: false, frame: 1, score: 0, w: 300, h: 500, shipX: 150,
+    lasers, rocks, bursts: [], pops: [], lives: 3, hitFlash: 0
+  });
+  let s = state([{ kind: '☄️', r: 13, hp: 1, pts: 3, speed: 1.6, zig: false, x: 100, y: 95, phase: 0 }],
+                [{ x: 100, y: 100 }]);
+  win.tickBlaster(s);
+  assertEqual(s.score, 3, 'blasting a comet scores its points');
+  assertEqual(s.pops.length, 1, 'a score number explodes at the contact point');
+  assertEqual(s.pops[0] && s.pops[0].label, '+3', 'the exploding number shows the points earned');
+  assert(buzzes.length === 1, 'the hit buzzes the phone when haptics are on');
+
+  // a tough 2-hp rock: first hit sparks but no score pop, second hit pops
+  const rock = { kind: '🪨', r: 19, hp: 2, pts: 2, speed: 0, zig: false, x: 100, y: 95, phase: 0 };
+  s = state([rock], [{ x: 100, y: 100 }]);
+  win.tickBlaster(s);
+  assert(s.pops.length === 0 && s.score === 0 && rock.hp === 1, 'a tough rock takes the first hit without dying');
+  assert(s.bursts.length === 1, 'the first hit still shows a contact spark');
+  s.lasers.push({ x: rock.x, y: rock.y + 2 });
+  win.tickBlaster(s);
+  assert(s.pops.length === 1 && s.pops[0].label === '+2', 'the second hit explodes the score number');
+
+  // the haptics toggle: off means silent, and the choice persists on this phone
+  buzzes.length = 0;
+  localStorage.setItem('wonderjar_haptics', JSON.stringify(false));
+  win.buzz(20);
+  assert(buzzes.length === 0, 'haptics off = no buzz');
+  win.openArcade();
+  const toggle = await waitFor(() => doc.getElementById('haptics-toggle'), 'arcade haptics toggle');
+  assert(!toggle.checked, 'arcade toggle remembers haptics are off');
+  toggle.checked = true;
+  toggle.dispatchEvent(new win.Event('change'));
+  assertEqual(JSON.parse(localStorage.getItem('wonderjar_haptics')), true, 'flipping the toggle saves the choice');
+  assert(buzzes.length === 1, 'turning it on gives an instant taste buzz');
+}
+
 (async () => {
   const snapshot = snapshotStore();
   try {
     await scenarioUniquePairs();
     await scenarioRepeatedQuestion();
     await scenarioPhoneOwnership();
+    await scenarioBlasterJuice();
   } catch (e) {
     report(false, 'test run crashed', e.message);
   } finally {
