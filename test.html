@@ -402,6 +402,69 @@ async function scenarioBlasterJuice() {
   win.tickBlaster(s);
   assert(s.power === null && s.powerTime === 0, 'the bonus gun expires when its timer runs out');
 
+  // wingmen: two escorts fire alongside you, from their own positions
+  s = state([], []);
+  s.power = 'wing'; s.powerTime = 99999; s.frame = fireFrame;
+  win.tickBlaster(s);
+  assertEqual(s.lasers.length, 3, 'wingmen add two more guns to your own');
+  assert(new Set(s.lasers.map(l => Math.round(l.x))).size === 3, 'each ship fires from its own spot');
+  assert(s.lasers.some(l => l.x < 150) && s.lasers.some(l => l.x > 150), 'the escorts flank you on both sides');
+
+  // ---- space junk variety + scarcity ----
+  const realRandom = win.Math.random;
+  const spawnWith = (roll, score) => {
+    win.Math.random = () => roll;
+    const st = state([], []);
+    st.score = score || 0;
+    st.tier = Math.floor((score || 0) / 1000); // skip the announcement
+    st.frame = win.blastDifficulty(st).spawnEvery;
+    win.tickBlaster(st);
+    return st;
+  };
+  assertEqual(spawnWith(0.001).rocks[0].kind, '🪨', 'the common roll is a plain asteroid');
+  assertEqual(spawnWith(0.5).rocks[0].kind, '☄️', 'the middle of the table is a comet');
+  assert(spawnWith(0.99).rocks[0].kind !== '🐄', 'even a 99th-percentile roll is not a cow');
+  assertEqual(spawnWith(0.999).rocks[0].kind, '🐄', 'the cosmic cow sits at the very end of the table');
+  const banana = spawnWith(0.945).rocks[0];
+  assertEqual(banana.kind, '🍌', 'banana peels are in the rare band');
+  assert(banana.pts > 10, 'the odd stuff pays much better than a rock');
+  // every kind is reachable, and the junk-drawer items really are scarce
+  win.Math.random = realRandom;
+  const seen = {};
+  for (let i = 0; i < 4000; i++) { const d = win.pickDebris(); seen[d.kind] = (seen[d.kind] || 0) + 1; }
+  assert(Object.keys(seen).length >= 8, 'the sky serves up a real variety (' + Object.keys(seen).length + ' kinds)');
+  assert((seen['🐄'] || 0) < 4000 * 0.02, 'cows stay genuinely rare (' + (seen['🐄'] || 0) + ' in 4000)');
+  assert((seen['🪨'] || 0) > 4000 * 0.2, 'ordinary asteroids are still the bulk of it');
+
+  // blasting something weird shouts its name on top of the score
+  s = state([{ ...win.pickDebris(), kind: '🐄', r: 24, hp: 1, pts: 30, speed: 0, zig: false, shout: 'COSMIC COW!!', x: 100, y: 95, phase: 0 }],
+            [{ x: 100, y: 100, dx: 0 }]);
+  win.tickBlaster(s);
+  assertEqual(s.score, 30, 'a cosmic cow is worth 30');
+  assert(s.pops.some(p => p.label === 'COSMIC COW!!' && p.word), 'rare finds shout their name');
+  assert(s.pops.some(p => p.label === '+30'), 'and still throw their score number');
+
+  // ---- past 1000 points the sky turns mean ----
+  const easy = win.blastDifficulty({ score: 0, frame: 0 });
+  const hyper = win.blastDifficulty({ score: 1000, frame: 0 });
+  const wild = win.blastDifficulty({ score: 2400, frame: 0 });
+  assertEqual(easy.tier, 0, 'below 1000 is the normal sky');
+  assertEqual(hyper.tier, 1, 'crossing 1000 moves up a tier');
+  assert(hyper.spawnEvery < easy.spawnEvery, 'junk arrives faster past 1000');
+  assert(hyper.speedMult > easy.speedMult, 'and it falls faster too');
+  assert(wild.spawnEvery < hyper.spawnEvery && wild.speedMult > hyper.speedMult, 'it keeps ramping every 1000');
+  assert(win.blastDifficulty({ score: 99000, frame: 9999 }).spawnEvery >= 20, 'the ramp has a floor so it stays playable');
+  // the milestone announces itself exactly once
+  s = state([], []);
+  s.score = 1000;
+  win.tickBlaster(s);
+  assert(s.pops.some(p => p.label === 'HYPERSPACE!'), 'crossing 1000 announces HYPERSPACE');
+  assertEqual(s.tier, 1, 'the tier is remembered');
+  const popsAfter = s.pops.length;
+  win.tickBlaster(s);
+  assert(s.pops.filter(p => p.label === 'HYPERSPACE!').length === 1, 'it only announces once');
+  assert(popsAfter >= 1, 'sanity: the announcement landed');
+
   // ---- Dark Nebula ----
   localStorage.setItem('wonderjar_dark_nebula', JSON.stringify(true));
   assert(win.darkNebulaOn(), 'Dark Nebula reads from this phone');

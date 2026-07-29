@@ -2525,16 +2525,54 @@ const BLAST_GAME = { fireEvery: 20, rapidFireEvery: 6, laserSpeed: 7.5, spawnEve
 const POWERS = {
   rapid:  { emoji: '⚡', name: 'RAPID FIRE!', frames: 60 * 8, laser: 'rgba(255,233,173,.95)' },
   triple: { emoji: '🔱', name: 'TRIPLE SHOT!', frames: 60 * 8, laser: 'rgba(184,169,245,.95)' },
-  mega:   { emoji: '💥', name: 'MEGA BLAST!', frames: 60 * 8, laser: 'rgba(255,157,60,.95)' }
+  mega:   { emoji: '💥', name: 'MEGA BLAST!', frames: 60 * 8, laser: 'rgba(255,157,60,.95)' },
+  wing:   { emoji: '🚀', name: 'WINGMEN!', frames: 60 * 8, laser: 'rgba(123,224,214,.95)' }
 };
 const POWER_KINDS = Object.keys(POWERS);
 const POWER_DROP_CHANCE = 0.16;
 const MEGA_RADIUS = 66; // a mega hit takes out everything this close to it
+const WING_OFFSET = 40; // how far the wingmen fly off each side
+
+// What's floating out there. `weight` is out of DEBRIS_TOTAL, so the junk drawer
+// stays rare and finding a cosmic cow is a genuine event. Rare finds shout their name.
+const DEBRIS = [
+  { kind: '🪨', weight: 330, r: 19, hp: 2, pts: 2,  speed: 0.9, zig: false },
+  { kind: '☄️', weight: 300, r: 13, hp: 1, pts: 3,  speed: 1.6, zig: false },
+  { kind: '🛸', weight: 150, r: 15, hp: 1, pts: 5,  speed: 1.3, zig: true },
+  { kind: '🛰️', weight: 110, r: 16, hp: 2, pts: 4,  speed: 1.0, zig: false },
+  { kind: '🧦', weight: 40,  r: 12, hp: 1, pts: 10, speed: 1.9, zig: true,  shout: 'A LOST SOCK!' },
+  { kind: '🍌', weight: 32,  r: 13, hp: 1, pts: 12, speed: 1.8, zig: true,  shout: 'BANANA PEEL!' },
+  { kind: '🍕', weight: 20,  r: 14, hp: 1, pts: 15, speed: 1.7, zig: true,  shout: 'SPACE PIZZA!' },
+  { kind: '🦆', weight: 12,  r: 13, hp: 1, pts: 18, speed: 2.0, zig: true,  shout: 'RUBBER DUCKY!' },
+  { kind: '🐄', weight: 6,   r: 24, hp: 3, pts: 30, speed: 0.7, zig: false, shout: 'COSMIC COW!!' }
+];
+const DEBRIS_TOTAL = DEBRIS.reduce((sum, d) => sum + d.weight, 0);
+
+function pickDebris() {
+  let roll = Math.random() * DEBRIS_TOTAL;
+  for (const d of DEBRIS) {
+    roll -= d.weight;
+    if (roll < 0) return d;
+  }
+  return DEBRIS[0];
+}
+
+// Past 1000 points the sky gets meaner — and again every 1000 after that.
+const HYPER_AT = 1000;
+function blastDifficulty(s) {
+  const tier = Math.floor((s.score || 0) / HYPER_AT);
+  const ramped = BLAST_GAME.spawnEvery - Math.floor(s.frame / 600) * 5 - tier * 9;
+  return {
+    tier,
+    spawnEvery: Math.max(Math.max(20, 42 - tier * 7), ramped),
+    speedMult: 1 + tier * 0.3
+  };
+}
 
 const MODE_INFO = {
   flight:  { name: '🚀 Wonder Flight', sub: 'Tap to fly your wonder-ship past the crystal gates. Grab sparkles for bonus points!', btn: 'Tap to launch! 🚀', highKey: 'game_high_' },
   catch:   { name: '🏮 Firefly Catch', sub: 'Tap the fireflies before they drift away — golden stars are worth 5! One minute of catching, and no way to lose.', btn: 'Start catching! ✨', highKey: 'game_high_catch_' },
-  blaster: { name: '☄️ Star Blaster', sub: 'Slide your finger to steer — your ship fires all by itself. Blast the asteroids before they hit you, and scoop up the bonus guns they drop! You have 3 shields.', btn: 'Blast off! ☄️', highKey: 'game_high_blaster_' }
+  blaster: { name: '☄️ Star Blaster', sub: 'Slide your finger to steer — your ship fires all by itself. Blast the space junk before it hits you and scoop up the bonus guns it drops! Watch for the weird stuff drifting by — a cosmic cow is worth 30. Past 1000 points it gets wild. You have 3 shields.', btn: 'Blast off! ☄️', highKey: 'game_high_blaster_' }
 };
 
 let gameCanvas = null, gameCtx = null, gameLoopId = null, gameState = null, gameMode = 'flight';
@@ -2578,7 +2616,7 @@ function setupGameCanvas() {
 function resetGameState(w, h) {
   const base = { running: false, over: false, frame: 0, score: 0, w, h };
   if (gameMode === 'catch') return { ...base, flies: [], pops: [], timeLeft: CATCH_GAME.durationFrames };
-  if (gameMode === 'blaster') return { ...base, shipX: w / 2, lasers: [], rocks: [], bursts: [], pops: [], powerups: [], power: null, powerTime: 0, lives: BLAST_GAME.lives, hitFlash: 0 };
+  if (gameMode === 'blaster') return { ...base, shipX: w / 2, lasers: [], rocks: [], bursts: [], pops: [], powerups: [], power: null, powerTime: 0, tier: 0, lives: BLAST_GAME.lives, hitFlash: 0 };
   return { ...base, shipY: h / 2, shipVel: 0, obstacles: [], sparkles: [] };
 }
 
@@ -2800,13 +2838,23 @@ function killRock(s, r, quiet) {
   s.score += r.pts;
   s.bursts.push({ x: r.x, y: r.y, age: 0, big: r.r > 16 });
   s.pops.push({ x: Math.max(26, Math.min(s.w - 26, r.x)), y: r.y, age: 0, label: '+' + r.pts, big: r.pts >= 5 });
-  if (!quiet) buzz(r.pts >= 5 ? 35 : 18);
+  if (r.shout) { // the weird stuff announces itself — finding it is the whole point
+    s.pops.push({ x: Math.max(60, Math.min(s.w - 60, r.x)), y: r.y - 34, age: 0, label: r.shout, word: true });
+    if (!quiet) buzz([25, 25, 25, 25, 60]);
+  } else if (!quiet) buzz(r.pts >= 5 ? 35 : 18);
   if (Math.random() < POWER_DROP_CHANCE) {
     s.powerups.push({ x: r.x, y: r.y, kind: POWER_KINDS[Math.floor(Math.random() * POWER_KINDS.length)], age: 0 });
   }
 }
 
 function tickBlaster(s) {
+  const diff = blastDifficulty(s);
+  if (diff.tier > (s.tier || 0)) { // crossed 1000 (and every 1000 after) — the sky speeds up
+    s.tier = diff.tier;
+    s.pops.push({ x: s.w / 2, y: s.h / 2, age: 0, label: diff.tier === 1 ? 'HYPERSPACE!' : 'FASTER!!', word: true });
+    buzz([40, 40, 40, 40, 90]);
+  }
+
   const fireEvery = s.power === 'rapid' ? BLAST_GAME.rapidFireEvery : BLAST_GAME.fireEvery;
   if (s.frame % fireEvery === 0) {
     const ly = s.h - BLAST_GAME.shipY - 20;
@@ -2815,21 +2863,23 @@ function tickBlaster(s) {
     } else {
       s.lasers.push({ x: s.shipX, y: ly, dx: 0 });
     }
+    if (s.power === 'wing') { // your two escorts fire right along with you
+      s.lasers.push({ x: s.shipX - WING_OFFSET, y: ly + 14, dx: 0 }, { x: s.shipX + WING_OFFSET, y: ly + 14, dx: 0 });
+    }
   }
   for (const l of s.lasers) { l.y -= BLAST_GAME.laserSpeed; l.x += l.dx || 0; }
   s.lasers = s.lasers.filter(l => l.y > -14 && l.x > -20 && l.x < s.w + 20 && !l.spent);
 
-  const spawnEvery = Math.max(42, BLAST_GAME.spawnEvery - Math.floor(s.frame / 600) * 5);
-  if (s.frame % spawnEvery === 0) {
-    const roll = Math.random();
-    let rock;
-    if (roll < 0.15) rock = { kind: '🛸', r: 15, hp: 1, pts: 5, speed: 1.3, zig: true };
-    else if (roll < 0.5) rock = { kind: '☄️', r: 13, hp: 1, pts: 3, speed: 1.6, zig: false };
-    else rock = { kind: '🪨', r: 19, hp: 2, pts: 2, speed: 0.9, zig: false };
-    rock.x = 26 + Math.random() * (s.w - 52);
-    rock.y = -24;
-    rock.phase = Math.random() * 100;
-    s.rocks.push(rock);
+  if (s.frame % diff.spawnEvery === 0) {
+    const d = pickDebris();
+    const margin = d.r + 8;
+    s.rocks.push({
+      ...d,
+      speed: d.speed * diff.speedMult,
+      x: margin + Math.random() * Math.max(1, s.w - margin * 2),
+      y: -24 - d.r,
+      phase: Math.random() * 100
+    });
   }
   const shipYpos = s.h - BLAST_GAME.shipY;
   for (const r of s.rocks) {
@@ -3021,6 +3071,18 @@ function renderBlaster(s, ctx) {
   ctx.font = '34px sans-serif';
   ctx.fillText('🚀', 0, 0);
   ctx.restore();
+  // wingmen — two smaller escorts tucked in behind each shoulder
+  if (s.power === 'wing') {
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(Math.max(14, Math.min(s.w - 14, s.shipX + side * WING_OFFSET)), s.h - BLAST_GAME.shipY + 14);
+      ctx.rotate(-Math.PI / 4);
+      ctx.fillStyle = '#fff';
+      ctx.font = '24px sans-serif';
+      ctx.fillText('🚀', 0, 0);
+      ctx.restore();
+    }
+  }
   // shields
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff';
