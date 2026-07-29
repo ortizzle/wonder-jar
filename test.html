@@ -572,14 +572,57 @@ async function scenarioReliability() {
   assertEqual(back, gone + 1, 'undo restores the deleted thought');
   assert(liveEntry() !== undefined, 'the restored record is readable again');
 
+  // ---- every thought stays reachable: search + paging ----
+  doc.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+  const many = { records: {} };
+  for (let i = 0; i < 70; i++) {
+    const id = 'entry_many' + i;
+    many.records[id] = {
+      id, type: 'entry', kidId: 'river',
+      text: i === 42 ? 'the day we found a turtle' : 'ordinary thought ' + i,
+      prompt: '', date: az(i + 1), updatedAt: 5000 + i
+    };
+  }
+  const deep = await bootApp(['unused'], { data: many });
+  clickKid(deep.doc, 'River');
+  await waitFor(() => deep.doc.getElementById('screen-journal').classList.contains('active'), 'jar for the big pile');
+  deep.doc.getElementById('collection-btn').click();
+  (await waitFor(() => [...deep.doc.querySelectorAll('.tab-btn')].find(b => b.textContent === '📖'), 'thoughts tab')).click();
+
+  const rows = () => deep.doc.querySelectorAll('#tab-content .entry-row').length;
+  await waitFor(() => rows() > 0, 'thoughts render');
+  assertEqual(rows(), 30, 'the first page shows 30 thoughts');
+  const showMore = [...deep.doc.querySelectorAll('#tab-content button')].find(b => b.textContent.includes('Show more'));
+  assert(!!showMore, 'a Show more button offers the rest');
+  showMore.click();
+  assertEqual(rows(), 60, 'Show more reveals the next page');
+  [...deep.doc.querySelectorAll('#tab-content button')].find(b => b.textContent.includes('Show more')).click();
+  assertEqual(rows(), 70, 'every thought is reachable — none are stranded');
+
+  const box = deep.doc.querySelector('#tab-content input[type="search"]');
+  assert(!!box, 'a search box appears once there is a pile of thoughts');
+  box.focus(); // as a real typing kid would be
+  box.value = 'turtle';
+  box.dispatchEvent(new deep.win.Event('input'));
+  assertEqual(rows(), 1, 'searching finds the one matching thought');
+  assert(/turtle/.test(deep.doc.querySelector('#tab-content .entry-text').textContent), 'and it is the right one');
+  assert(deep.doc.activeElement === box, 'the redraw keeps focus in the search box (keyboard stays open)');
+  box.value = 'definitelynotpresent';
+  box.dispatchEvent(new deep.win.Event('input'));
+  assertEqual(rows(), 0, 'a search with no matches says so instead of showing everything');
+
   // ---- a full phone warns instead of losing thoughts silently ----
-  const realSet = win.localStorage.setItem.bind(win.localStorage);
-  win.localStorage.setItem = (k, v) => { if (k === 'wonderjar_data') throw new Error('QuotaExceededError'); return realSet(k, v); };
-  doc.querySelectorAll('.toast').forEach(t => t.remove());
-  win.saveLocal();
-  const warn = doc.querySelector('.toast');
+  // (uses the live iframe — `deep` replaced the earlier one)
+  const realSet = deep.win.localStorage.setItem.bind(deep.win.localStorage);
+  deep.win.localStorage.setItem = (k, v) => {
+    if (k === 'wonderjar_data') throw new Error('QuotaExceededError');
+    return realSet(k, v);
+  };
+  deep.doc.querySelectorAll('.toast').forEach(t => t.remove());
+  deep.win.saveLocal();
+  const warn = deep.doc.querySelector('.toast');
   assert(warn && /out of space/i.test(warn.textContent), 'a failed save warns the family');
-  win.localStorage.setItem = realSet;
+  deep.win.localStorage.setItem = realSet;
 }
 
 (async () => {

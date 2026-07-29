@@ -1872,6 +1872,73 @@ function makeEntryRow(entry, { own, onChanged }) {
   return row;
 }
 
+const LIST_PAGE = 30;
+// A searchable, paged entry list — so no thought is ever out of reach.
+// Only the list redraws while typing, so the search box keeps focus (and the
+// phone keyboard stays open).
+function attachEntryList(content, getEntries, { own, emptyText, searchPlaceholder }) {
+  if (!getEntries().length) {
+    const p = document.createElement('p');
+    p.textContent = emptyText;
+    content.appendChild(p);
+    return;
+  }
+  let search = null;
+  if (getEntries().length > 8) { // a search box on 3 thoughts is just clutter
+    search = document.createElement('input');
+    search.type = 'search';
+    search.className = 'text-input';
+    search.placeholder = searchPlaceholder;
+    search.style.marginBottom = '10px';
+    content.appendChild(search);
+  }
+  const list = document.createElement('div');
+  content.appendChild(list);
+  let shown = LIST_PAGE;
+
+  function draw() {
+    list.textContent = '';
+    const q = (search ? search.value : '').trim().toLowerCase();
+    const entries = getEntries(); // re-read so edits and deletes show up
+    const matches = q
+      ? entries.filter(e =>
+          entryFullText(e).toLowerCase().includes(q) ||
+          (e.prompt || '').toLowerCase().includes(q) ||
+          AZ.pretty(e.date).toLowerCase().includes(q) || // "Jul", "Mon", "3"
+          e.date.includes(q))
+      : entries;
+
+    if (!matches.length) {
+      const p = document.createElement('p');
+      p.textContent = 'Nothing matches that — try another word, or a month like "Jul"!';
+      list.appendChild(p);
+      return;
+    }
+    if (q) {
+      const count = document.createElement('div');
+      count.className = 'entry-meta';
+      count.style.marginBottom = '8px';
+      count.textContent = matches.length + (matches.length === 1 ? ' thought' : ' thoughts') + ' found';
+      list.appendChild(count);
+    }
+    for (const e of matches.slice(0, shown)) {
+      list.appendChild(makeEntryRow(e, { own, onChanged: draw }));
+    }
+    if (matches.length > shown) {
+      const more = document.createElement('button');
+      more.className = 'btn-small';
+      more.style.width = '100%';
+      more.style.marginTop = '10px';
+      more.textContent = '⬇️ Show more (' + (matches.length - shown) + ' older)';
+      more.addEventListener('click', () => { shown += LIST_PAGE; draw(); });
+      list.appendChild(more);
+    }
+  }
+
+  if (search) search.addEventListener('input', () => { shown = LIST_PAGE; draw(); });
+  draw();
+}
+
 function renderThoughtsTab(content) {
   content.textContent = '';
   const magic = document.createElement('button');
@@ -1882,16 +1949,11 @@ function renderThoughtsTab(content) {
   magic.addEventListener('click', () => generateInsights('kid'));
   content.appendChild(magic);
 
-  const entries = entriesFor(currentKid.id);
-  if (!entries.length) {
-    const p = document.createElement('p');
-    p.textContent = 'No thoughts yet — tap the mic and add your first!';
-    content.appendChild(p);
-    return;
-  }
-  for (const e of entries.slice(0, 60)) {
-    content.appendChild(makeEntryRow(e, { own: true, onChanged: () => renderThoughtsTab(content) }));
-  }
+  attachEntryList(content, () => entriesFor(currentKid.id), {
+    own: true,
+    emptyText: 'No thoughts yet — tap the mic and add your first!',
+    searchPlaceholder: '🔎 Find a thought…'
+  });
 }
 
 function renderFamilyTab(content) {
@@ -1915,18 +1977,13 @@ function renderFamilyTab(content) {
   });
   content.appendChild(allBtn);
 
-  const entries = Object.values(data.records)
+  attachEntryList(content, () => Object.values(data.records)
     .filter(r => r.type === 'entry' && !r.deleted && r.kidId !== currentKid.id)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-  if (!entries.length) {
-    const p = document.createElement('p');
-    p.textContent = 'No family thoughts yet — the jars are waiting!';
-    content.appendChild(p);
-    return;
-  }
-  for (const e of entries.slice(0, 60)) {
-    content.appendChild(makeEntryRow(e, { own: false, onChanged: () => renderFamilyTab(content) }));
-  }
+    .sort((a, b) => b.updatedAt - a.updatedAt), {
+    own: false,
+    emptyText: 'No family thoughts yet — the jars are waiting!',
+    searchPlaceholder: '🔎 Find a family thought…'
+  });
 }
 
 document.getElementById('collection-btn').addEventListener('click', () => {
