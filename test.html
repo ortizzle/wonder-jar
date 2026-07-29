@@ -522,6 +522,15 @@ async function scenarioReliability() {
   const wishRecords = () => Object.values(JSON.parse(localStorage.getItem('wonderjar_data')).records)
     .filter(r => r.type === 'wishspent' && !r.deleted);
   win.renderProfiles();
+
+  // every jar looks equally important — grown-ups fill one too
+  const cards = [...doc.querySelectorAll('.kid-card')];
+  const sizes = cards.map(c => Math.round(c.getBoundingClientRect().width) + 'x' + Math.round(c.getBoundingClientRect().height));
+  assertEqual(cards.length, 4, 'all four people get a card');
+  assert(new Set(sizes).size === 1, 'the four cards are the same size (' + [...new Set(sizes)].join(' / ') + ')');
+  assert(cards.every(c => (c.ownerDocument.defaultView.getComputedStyle(c).opacity === '1')),
+    'no card is faded out relative to the others');
+
   const statsFromCard = win.statsFor('river');
   assert(statsFromCard.pendingWishes.length >= 1, 'a wish is available to patch the gap');
   assertEqual(wishRecords().length, 0, 'rendering the profile screen spends no wishes');

@@ -349,10 +349,9 @@
   @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } }
 
   /* ---------- grown-ups + profile actions ---------- */
-  .grownups-row { display: flex; gap: 12px; margin-top: 18px; justify-content: center; }
-  .kid-card.parent { width: 118px; padding: 14px 10px 12px; opacity: .92; }
-  .kid-card.parent .kid-avatar { width: 52px; height: 52px; font-size: 28px; }
-  .kid-card.parent .kid-name { font-size: 16px; }
+  /* grown-ups get the same card as the girls — everyone fills a jar now.
+     Same 18px gap as .kid-cards so the four read as one grid. */
+  .grownups-row { display: flex; gap: 18px; margin-top: 18px; flex-wrap: wrap; justify-content: center; }
   .profile-actions { display: flex; gap: 12px; margin-top: 26px; flex-wrap: wrap; justify-content: center; }
   .pill-btn {
     min-height: 44px; padding: 0 18px; border-radius: 999px;
