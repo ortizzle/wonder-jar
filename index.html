@@ -339,6 +339,12 @@
     padding: 12px 20px; border-radius: 999px; font-weight: 800; font-size: 14px;
     z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,.4);
     animation: toastIn .25s ease;
+    display: flex; align-items: center; gap: 12px; max-width: 92vw;
+  }
+  .toast-btn {
+    background: var(--glow); color: #4a2c05; border-radius: 999px;
+    padding: 0 16px; min-height: 36px; font-weight: 900; font-size: 14px;
+    flex-shrink: 0;
   }
   @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } }
 
@@ -775,7 +781,15 @@ function setSyncDot(state) {
   const d = document.getElementById('sync-dot');
   if (d) d.className = 'sync-dot' + (state ? ' ' + state : '');
 }
-function saveLocal() { Store.set('data', data); updateSWMeta(); }
+let warnedFullStorage = false;
+function saveLocal() {
+  // a full localStorage fails silently otherwise — the thought looks saved and isn't
+  if (!Store.set('data', data) && !warnedFullStorage) {
+    warnedFullStorage = true;
+    toast('This phone is out of space — thoughts may not stick! 💾');
+  }
+  updateSWMeta();
+}
 let syncTimer = null;
 function syncAfterChange() {
   saveLocal();
@@ -1104,6 +1118,9 @@ function addDays(dateStr, n) {
   return AZ.dateKey(d);
 }
 
+// Pure — never writes. The nights a Wonder Wish *would* patch come back as
+// pendingWishes so the streak reads right everywhere, but the wish is only
+// actually spent (and announced) by commitWishes, from the kid's own jar.
 function statsFor(kidId) {
   const entries = entriesFor(kidId);
   const entryDates = new Set(entries.map(e => e.date));
@@ -1111,9 +1128,9 @@ function statsFor(kidId) {
   const spentDates = new Set(spent.map(r => r.date));
   let available = Math.floor(entries.length / WISH_EVERY) - spent.length;
 
-  const filled = (d) => entryDates.has(d) || spentDates.has(d);
+  const pendingWishes = [];
+  const filled = (d) => entryDates.has(d) || spentDates.has(d) || pendingWishes.includes(d);
   let streak = 0;
-  let wishUsedNow = false;
   if (entries.length) {
     let cursor = AZ.today();
     if (!filled(cursor)) cursor = addDays(cursor, -1); // grace: tonight isn't over yet
@@ -1122,12 +1139,9 @@ function statsFor(kidId) {
         streak++;
         cursor = addDays(cursor, -1);
       } else if (available > 0 && streak > 0 && filled(addDays(cursor, -1))) {
-        // exactly one missing night inside the chain — a Wonder Wish patches it
-        const key = 'wishspent_' + kidId + '_' + cursor;
-        data.records[key] = { id: key, type: 'wishspent', kidId, date: cursor, updatedAt: Date.now() };
-        spentDates.add(cursor);
+        // exactly one missing night inside the chain — a Wonder Wish would patch it
+        pendingWishes.push(cursor);
         available--;
-        wishUsedNow = true;
       } else break;
     }
   }
@@ -1137,8 +1151,19 @@ function statsFor(kidId) {
     currentStreak: streak,
     sparks,
     wishes: Math.max(0, available),
-    wishUsedNow
+    pendingWishes
   };
+}
+
+// Actually spend the wishes statsFor found. Returns how many were used.
+function commitWishes(kidId, stats) {
+  if (!stats.pendingWishes.length) return 0;
+  for (const date of stats.pendingWishes) {
+    const key = 'wishspent_' + kidId + '_' + date;
+    data.records[key] = { id: key, type: 'wishspent', kidId, date, updatedAt: Date.now() };
+  }
+  syncAfterChange();
+  return stats.pendingWishes.length;
 }
 
 function evaluateBadges(kidId) {
@@ -1246,10 +1271,9 @@ function renderStats(popWhich) {
   const wishChip = document.getElementById('chip-wish');
   wishChip.style.display = stats.wishes > 0 ? 'flex' : 'none';
   document.getElementById('wish-num').textContent = stats.wishes;
-  if (stats.wishUsedNow) {
-    syncAfterChange();
-    toast('🪄 A Wonder Wish saved your streak!');
-  }
+  // the jar is the only place a wish is actually spent — so it's never silent
+  const used = commitWishes(currentKid.id, stats);
+  if (used) toast(used === 1 ? '🪄 A Wonder Wish saved your streak!' : '🪄 ' + used + ' Wonder Wishes saved your streak!');
   if (popWhich) {
     const chip = document.getElementById('chip-' + popWhich);
     chip.classList.remove('pop');
@@ -1783,13 +1807,20 @@ function makeEntryRow(entry, { own, onChanged }) {
     del.addEventListener('click', () => {
       showModal({
         title: 'Let this thought go?',
-        message: 'It will float out of the jar forever.',
+        message: 'It will float out of the jar — you get a moment to catch it back.',
         confirmText: 'Let it go', cancelText: 'Keep it',
         onConfirm: () => {
           data.records[entry.id] = { ...entry, deleted: true, updatedAt: Date.now() };
           syncAfterChange();
           renderJarFireflies();
           onChanged();
+          toast('Thought let go 🌙', { label: 'Undo', onClick: () => {
+            data.records[entry.id] = { ...entry, deleted: false, updatedAt: Date.now() };
+            syncAfterChange();
+            renderJarFireflies();
+            onChanged();
+            toast('Caught it! ✨');
+          } });
         }
       });
     });
@@ -1966,13 +1997,33 @@ function confettiBurst(n) {
 }
 
 let toastEl = null;
-function toast(msg) {
+// action (optional): { label, onClick } — adds a tappable button and holds longer
+function toast(msg, action) {
   if (toastEl) toastEl.remove();
-  toastEl = document.createElement('div');
-  toastEl.className = 'toast';
-  toastEl.textContent = msg;
-  document.body.appendChild(toastEl);
-  setTimeout(() => { if (toastEl) { toastEl.remove(); toastEl = null; } }, 2600);
+  const el = document.createElement('div');
+  el.className = 'toast';
+  const text = document.createElement('span');
+  text.textContent = msg;
+  el.appendChild(text);
+  if (action) {
+    const btn = document.createElement('button');
+    btn.className = 'toast-btn';
+    btn.textContent = action.label;
+    btn.addEventListener('click', () => {
+      el.remove();
+      if (toastEl === el) toastEl = null;
+      action.onClick();
+    });
+    el.appendChild(btn);
+  }
+  toastEl = el;
+  document.body.appendChild(el);
+  // each timer only clears the toast it created — otherwise a quick second
+  // toast gets cut short by the first one's timer
+  setTimeout(() => {
+    el.remove();
+    if (toastEl === el) toastEl = null;
+  }, action ? 7000 : 2600);
 }
 
 // ---------- custom modals (canonical — no alert/confirm/prompt) ----------
@@ -2332,12 +2383,18 @@ function makeAdminEntryRow(entry) {
   del.addEventListener('click', () => {
     showModal({
       title: 'Remove this entry?',
-      message: 'This removes it for everyone, everywhere it syncs. It cannot be undone.',
+      message: 'This removes it for everyone, everywhere it syncs.',
       confirmText: 'Remove', cancelText: 'Keep it',
       onConfirm: () => {
         data.records[entry.id] = { ...entry, deleted: true, updatedAt: Date.now() };
         syncAfterChange();
         renderAdminList();
+        toast('Entry removed', { label: 'Undo', onClick: () => {
+          data.records[entry.id] = { ...entry, deleted: false, updatedAt: Date.now() };
+          syncAfterChange();
+          renderAdminList();
+          toast('Restored ✨');
+        } });
       }
     });
   });
