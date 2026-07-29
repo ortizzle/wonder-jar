@@ -497,6 +497,91 @@ async function scenarioBlasterJuice() {
   assert(buzzes.length === 1, 'turning it on gives an instant taste buzz');
 }
 
+/* ---- scenario 5: the bug-fix batch — wishes, toasts, undo, full storage ---- */
+async function scenarioReliability() {
+  // ---- Wonder Wishes are never spent by a background render ----
+  // River has 7 entries (1 wish earned) with one gap inside the chain
+  const today = new Date();
+  const az = (back) => {
+    const d = new Date(today.getTime() - back * 86400000);
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Phoenix' }).format(d);
+  };
+  const records = {};
+  // days 1..8 back, skipping day 3 — that gap is what a wish would patch
+  let made = 0;
+  for (const back of [1, 2, 4, 5, 6, 7, 8, 9]) {
+    const id = 'entry_seed' + back;
+    records[id] = { id, type: 'entry', kidId: 'river', text: 'seed ' + back, prompt: '', date: az(back), updatedAt: 1000 + back };
+    made++;
+  }
+  assert(made >= 7, 'seeded enough entries to earn a Wonder Wish');
+
+  const { doc, win } = await bootApp(['unused'], { data: { records } });
+
+  // just rendering the profile screen must not write a wishspent record
+  const wishRecords = () => Object.values(JSON.parse(localStorage.getItem('wonderjar_data')).records)
+    .filter(r => r.type === 'wishspent' && !r.deleted);
+  win.renderProfiles();
+  const statsFromCard = win.statsFor('river');
+  assert(statsFromCard.pendingWishes.length >= 1, 'a wish is available to patch the gap');
+  assertEqual(wishRecords().length, 0, 'rendering the profile screen spends no wishes');
+  win.statsFor('river'); win.statsFor('river');
+  assertEqual(wishRecords().length, 0, 'statsFor stays pure no matter how often it runs');
+  assert(statsFromCard.currentStreak > 3, 'the streak still reads across the patched gap (' + statsFromCard.currentStreak + ')');
+
+  // opening River's jar spends it — once — and says so
+  clickKid(doc, 'River');
+  await waitFor(() => doc.getElementById('screen-journal').classList.contains('active'), 'jar opens');
+  await waitFor(() => wishRecords().length === 1, 'opening the jar spends the wish');
+  assert(doc.querySelector('.toast'), 'and tells the kid a wish was used');
+  win.renderStats();
+  assertEqual(wishRecords().length, 1, 're-rendering does not spend a second wish');
+
+  // ---- toasts don't cut each other short ----
+  doc.querySelectorAll('.toast').forEach(t => t.remove());
+  win.toast('first');
+  await sleep(1500);
+  win.toast('second');       // replaces the first; its own timer runs to t=4100
+  await sleep(1400);         // t=2900: the FIRST toast's 2.6s timer has now fired
+  const alive = doc.querySelectorAll('.toast');
+  assert(alive.length === 1 && alive[0].textContent.includes('second'),
+    "a quick second toast outlives the first toast's timer");
+  alive.forEach(t => t.remove());
+
+  // ---- undo brings a deleted thought back ----
+  const entryId = Object.keys(records)[0];
+  const liveEntry = () => {
+    const r = JSON.parse(localStorage.getItem('wonderjar_data')).records[entryId];
+    return r && !r.deleted;
+  };
+  doc.getElementById('collection-btn').click();
+  const thoughtsTab = await waitFor(() => [...doc.querySelectorAll('.tab-btn')].find(b => b.textContent === '📖'), 'thoughts tab');
+  thoughtsTab.click();
+  const delBtn = await waitFor(() => [...doc.querySelectorAll('#tab-content .entry-actions button')]
+    .find(b => b.textContent === '🗑️'), 'delete button');
+  delBtn.click();
+  const confirm = await waitFor(() => [...doc.querySelectorAll('.modal-overlay button')]
+    .find(b => b.textContent === 'Let it go'), 'delete confirm');
+  confirm.click();
+  await waitFor(() => doc.querySelector('.toast-btn'), 'undo button appears');
+  const gone = Object.values(JSON.parse(localStorage.getItem('wonderjar_data')).records)
+    .filter(r => r.type === 'entry' && r.kidId === 'river' && !r.deleted).length;
+  doc.querySelector('.toast-btn').click();
+  const back = Object.values(JSON.parse(localStorage.getItem('wonderjar_data')).records)
+    .filter(r => r.type === 'entry' && r.kidId === 'river' && !r.deleted).length;
+  assertEqual(back, gone + 1, 'undo restores the deleted thought');
+  assert(liveEntry() !== undefined, 'the restored record is readable again');
+
+  // ---- a full phone warns instead of losing thoughts silently ----
+  const realSet = win.localStorage.setItem.bind(win.localStorage);
+  win.localStorage.setItem = (k, v) => { if (k === 'wonderjar_data') throw new Error('QuotaExceededError'); return realSet(k, v); };
+  doc.querySelectorAll('.toast').forEach(t => t.remove());
+  win.saveLocal();
+  const warn = doc.querySelector('.toast');
+  assert(warn && /out of space/i.test(warn.textContent), 'a failed save warns the family');
+  win.localStorage.setItem = realSet;
+}
+
 (async () => {
   const snapshot = snapshotStore();
   try {
@@ -504,6 +589,7 @@ async function scenarioBlasterJuice() {
     await scenarioRepeatedQuestion();
     await scenarioPhoneOwnership();
     await scenarioBlasterJuice();
+    await scenarioReliability();
   } catch (e) {
     report(false, 'test run crashed', e.message);
   } finally {
