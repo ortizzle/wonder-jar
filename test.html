@@ -53,6 +53,31 @@ function assertEqual(actual, expected, label) {
 }
 function assert(cond, label, detail) { report(!!cond, label, detail); }
 
+/* ---- canvas spying: what colour was each glyph actually painted with? ---- */
+function offscreenCtx(doc) {
+  const c = doc.createElement('canvas');
+  c.width = 300; c.height = 500;
+  return c.getContext('2d');
+}
+function alphaOf(fill) {
+  const m = String(fill).match(/rgba\([^)]*,\s*([\d.]+)\s*\)/);
+  return m ? Number(m[1]) : 1;
+}
+// wraps a real 2d context, recording the live fillStyle at each matching fillText
+function fillSpy(ctx, match, sink) {
+  return new Proxy(ctx, {
+    get(t, k) {
+      const v = t[k];
+      if (k === 'fillText') return (txt, x, y) => {
+        if (match(String(txt))) sink.push({ txt: String(txt), fill: String(t.fillStyle) });
+        return v.call(t, txt, x, y);
+      };
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+    set(t, k, val) { t[k] = val; return true; }
+  });
+}
+
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function waitFor(fn, label, timeout = 8000) {
   const start = Date.now();
@@ -290,7 +315,8 @@ async function scenarioBlasterJuice() {
   // one laser about to hit a 1-hp comet worth 3 points — drive the real tick
   const state = (rocks, lasers) => ({
     running: true, over: false, frame: 1, score: 0, w: 300, h: 500, shipX: 150,
-    lasers, rocks, bursts: [], pops: [], lives: 3, hitFlash: 0
+    lasers, rocks, bursts: [], pops: [], powerups: [], power: null, powerTime: 0,
+    lives: 3, hitFlash: 0
   });
   let s = state([{ kind: '☄️', r: 13, hp: 1, pts: 3, speed: 1.6, zig: false, x: 100, y: 95, phase: 0 }],
                 [{ x: 100, y: 100 }]);
@@ -312,28 +338,87 @@ async function scenarioBlasterJuice() {
 
   // the ship/rocks/shields must stay fully bright while a score number fades
   // (emoji inherit the fill's alpha — a fading pop once dimmed everything after it)
-  const offscreen = doc.createElement('canvas');
-  offscreen.width = 300; offscreen.height = 500;
-  const real = offscreen.getContext('2d');
   const draws = [];
-  const spyCtx = new Proxy(real, {
-    get(t, k) {
-      const v = t[k];
-      if (k === 'fillText') return (txt, x, y) => { draws.push({ txt: String(txt), fill: String(t.fillStyle) }); return v.call(t, txt, x, y); };
-      return typeof v === 'function' ? v.bind(t) : v;
-    },
-    set(t, k, val) { t[k] = val; return true; }
-  });
+  const spyCtx = fillSpy(offscreenCtx(doc), () => true, draws);
   s = state([{ kind: '🪨', r: 19, hp: 2, pts: 2, speed: 0, zig: false, x: 80, y: 120, phase: 0 }], []);
   s.pops.push({ x: 150, y: 200, age: 28, label: '+5', big: true }); // mid-fade, alpha ≈ .25
   win.renderBlaster(s, spyCtx);
   win.renderBlaster(s, spyCtx); // second frame: leaked state would dim the rocks drawn early
-  const alphaOf = (fill) => { const m = fill.match(/rgba\([^)]*,\s*([\d.]+)\)/); return m ? Number(m[1]) : 1; };
   const emojiDraws = draws.filter(d => /🚀|🪨|☄️|🛸|🛡️/.test(d.txt));
   assert(emojiDraws.length >= 4, 'spy saw the ship, rock, and shield draws');
   assert(emojiDraws.every(d => alphaOf(d.fill) === 1), 'ship, rocks, and shields stay fully bright while numbers fade');
   const popDraws = draws.filter(d => d.txt === '+5');
   assert(popDraws.length && popDraws.every(d => alphaOf(d.fill) < 1), 'the fading number itself is still translucent');
+
+  // ---- bonus guns ----
+  const rockAt = (x, y, extra) => ({ kind: '🪨', r: 19, hp: 2, pts: 2, speed: 0, zig: false, x, y, phase: 0, ...extra });
+
+  // rapid fire shoots far more often than the normal cadence
+  const shotsOver = (frames, power) => {
+    const st = state([], []);
+    st.power = power; st.powerTime = 99999;
+    let fired = 0;
+    for (let i = 0; i < frames; i++) { st.frame++; const before = st.lasers.length; win.tickBlaster(st); fired += Math.max(0, st.lasers.length - before); }
+    return fired;
+  };
+  const normalShots = shotsOver(120, null);
+  const rapidShots = shotsOver(120, 'rapid');
+  assert(rapidShots > normalShots * 2, 'rapid fire shoots way more often (' + rapidShots + ' vs ' + normalShots + ')');
+
+  // triple shot puts three lasers up at once, spreading apart.
+  // (BLAST_GAME is script-scoped, not on window — probe for a frame that fires.)
+  let fireFrame = 0;
+  for (let i = 1; i <= 240 && !fireFrame; i++) {
+    const probe = state([], []);
+    probe.frame = i;
+    win.tickBlaster(probe);
+    if (probe.lasers.length) fireFrame = i;
+  }
+  assert(fireFrame > 0, 'found the normal firing cadence');
+  s = state([], []);
+  s.power = 'triple'; s.powerTime = 99999; s.frame = fireFrame;
+  win.tickBlaster(s);
+  assertEqual(s.lasers.length, 3, 'triple shot fires three lasers at once');
+  assert(new Set(s.lasers.map(l => l.dx)).size === 3, 'the three lasers spread in different directions');
+
+  // mega blast one-shots a tough boulder AND clears its neighbours
+  s = state([rockAt(100, 95), rockAt(130, 110), rockAt(260, 400)], [{ x: 100, y: 100, dx: 0 }]);
+  s.power = 'mega'; s.powerTime = 99999;
+  win.tickBlaster(s);
+  assertEqual(s.score, 4, 'a mega blast cracks the boulder and its neighbour in one shot');
+  assertEqual(s.pops.length, 2, 'every rock caught in the blast throws its own number');
+  assert(s.rocks.length === 1 && s.rocks[0].x === 260, 'a far-away rock survives the shockwave');
+  assert(s.bursts.some(b => b.mega), 'the mega shockwave draws its own big ring');
+
+  // grabbing a dropped gun arms it, with a shout and a timer that runs down
+  s = state([], []);
+  s.powerups.push({ x: 150, y: 500 - 58 - 6, kind: 'rapid', age: 0 }); // right on the ship
+  win.tickBlaster(s);
+  assertEqual(s.power, 'rapid', 'flying into a bonus gun arms it');
+  assert(s.powerTime > 0, 'the bonus gun starts a countdown');
+  assert(s.pops.some(p => p.label === 'RAPID FIRE!' && p.word), 'grabbing it shouts the gun name');
+  assertEqual(s.powerups.length, 0, 'the pickup is consumed');
+  s.powerTime = 1;
+  win.tickBlaster(s);
+  assert(s.power === null && s.powerTime === 0, 'the bonus gun expires when its timer runs out');
+
+  // ---- Dark Nebula ----
+  localStorage.setItem('wonderjar_dark_nebula', JSON.stringify(true));
+  assert(win.darkNebulaOn(), 'Dark Nebula reads from this phone');
+  const alphas = [];
+  const darkSpy = fillSpy(offscreenCtx(doc), t => t === '🪨', alphas);
+  s = state([rockAt(80, 20), rockAt(160, 290)], []);
+  win.renderBlaster(s, darkSpy);
+  const a0 = alphaOf(alphas[0].fill), a1 = alphaOf(alphas[1].fill);
+  assert(a0 < 0.2, 'a far-off asteroid is nearly invisible in Dark Nebula');
+  assert(a1 > a0, 'it fades up brighter as it falls toward you');
+  // high scores stay separate so the two modes never share a leaderboard
+  const darkKey = win.highKeyFor('blaster', 'river');
+  localStorage.setItem('wonderjar_dark_nebula', JSON.stringify(false));
+  assert(darkKey !== win.highKeyFor('blaster', 'river'), 'Dark Nebula keeps its own best score');
+  alphas.length = 0;
+  win.renderBlaster(s, darkSpy);
+  assert(alphas.length === 2 && alphas.every(a => alphaOf(a.fill) === 1), 'with Dark Nebula off the asteroids are fully lit again');
 
   // the haptics toggle: off means silent, and the choice persists on this phone
   buzzes.length = 0;
