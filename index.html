@@ -713,6 +713,14 @@ const Store = {
   remove(key) { localStorage.removeItem(this.ns + key); }
 };
 
+// A store that's missing `records` (truncated Gist, hand-edited backup, an
+// interrupted write) would otherwise crash every read helper on load.
+function normalizeData(d) {
+  return (d && typeof d === 'object' && d.records && typeof d.records === 'object')
+    ? d
+    : { records: {} };
+}
+
 // ---------- Gist sync (canonical safe merge + tombstones) ----------
 const Sync = {
   get gistId() { return Store.get('gist_id', ''); },
@@ -731,11 +739,11 @@ const Sync = {
     const file = gist.files[this.filename];
     if (!file) return { records: {} };
     const text = file.truncated ? await (await fetch(file.raw_url)).text() : file.content;
-    return JSON.parse(text || '{"records":{}}');
+    return normalizeData(JSON.parse(text || '{"records":{}}'));
   },
 
   merge(local, remote) {
-    const out = { records: { ...remote.records } };
+    const out = { records: { ...normalizeData(remote).records } };
     for (const [id, rec] of Object.entries(local.records || {})) {
       const r = out.records[id];
       if (!r || (rec.updatedAt || 0) > (r.updatedAt || 0)) out.records[id] = rec;
@@ -764,7 +772,7 @@ const Sync = {
   },
 
   async load() {
-    const local = Store.get('data', { records: {} });
+    const local = normalizeData(Store.get('data', { records: {} }));
     try {
       const remote = await this.pullRemote();
       const merged = this.merge(local, remote);
@@ -1060,7 +1068,7 @@ const MILESTONES = [
 ];
 
 // ---------- app state ----------
-let data = Store.get('data', { records: {} });
+let data = normalizeData(Store.get('data', { records: {} }));
 let currentKid = null;
 let currentPrompt = '';
 let recognizing = false;
@@ -1126,7 +1134,11 @@ function statsFor(kidId) {
   const entryDates = new Set(entries.map(e => e.date));
   const spent = Object.values(data.records).filter(r => r.type === 'wishspent' && r.kidId === kidId && !r.deleted);
   const spentDates = new Set(spent.map(r => r.date));
-  let available = Math.floor(entries.length / WISH_EVERY) - spent.length;
+  // Count glowing NIGHTS, not records. Normally identical (one entry per night),
+  // but if the same kid writes on two devices offline, the merge keeps both
+  // records — counting nights stops that from inflating rewards.
+  const nights = entryDates.size;
+  let available = Math.floor(nights / WISH_EVERY) - spent.length;
 
   const pendingWishes = [];
   const filled = (d) => entryDates.has(d) || spentDates.has(d) || pendingWishes.includes(d);
@@ -1145,9 +1157,9 @@ function statsFor(kidId) {
       } else break;
     }
   }
-  const sparks = entries.length * SPARKS_PER_ENTRY + glimmersFor(kidId).size * 5 + badgesFor(kidId).size * 20;
+  const sparks = nights * SPARKS_PER_ENTRY + glimmersFor(kidId).size * 5 + badgesFor(kidId).size * 20;
   return {
-    totalEntries: entries.length,
+    totalEntries: nights,
     currentStreak: streak,
     sparks,
     wishes: Math.max(0, available),
@@ -2220,8 +2232,14 @@ async function askClaude(prompt, { system = null, maxTokens = 200 } = {}) {
       'anthropic-dangerous-direct-browser-access': 'true'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: maxTokens,
+      // These are tiny asks (a 15-word question, a short report). Thinking is
+      // ON by default on Sonnet 5 and shares the max_tokens budget — leaving it
+      // on would eat the whole allowance and truncate the answer. Off + low
+      // effort keeps it fast and cheap, which is what a kid waiting wants.
+      thinking: { type: 'disabled' },
+      output_config: { effort: 'low' },
       ...(system ? { system } : {}),
       messages: [{ role: 'user', content: prompt }]
     })
