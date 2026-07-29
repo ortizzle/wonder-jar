@@ -1592,6 +1592,12 @@ document.getElementById('save-btn').addEventListener('click', () => {
       if (found) queueCeleb(() => revealGlimmer(found));
       for (const b of evaluateBadges(currentKid.id)) queueCeleb(() => revealBadge(b));
       syncAfterChange();
+      // only tell kids who already found it — never spoil the secret for the rest.
+      // Queued BEFORE the follow-up: maybeFollowUp shows a card without calling
+      // nextCeleb, so anything after it in the queue would never run.
+      if (hasPlayedArcade(currentKid.id)) {
+        queueCeleb(() => { toast('🕹️ The Secret Arcade just woke up!'); nextCeleb(); });
+      }
       queueCeleb(() => { maybeFollowUp(entryId); });
       nextCeleb();
     } else if (answeredFollowUp) {
@@ -2769,6 +2775,32 @@ function openGame(mode) {
   document.getElementById('game-score').textContent = '0';
 }
 
+// The arcade sleeps until tonight's thought is in the jar — and wakes again
+// with the next Arizona night, so it's earned fresh each evening.
+function arcadeUnlocked(personId) {
+  if (!personId) return false;
+  return entriesFor(personId).some(e => e.date === AZ.today());
+}
+
+// has this person found the arcade before? (used so we never spoil the secret)
+function hasPlayedArcade(personId) {
+  if (!personId) return false;
+  return Object.values(MODE_INFO).some(info =>
+    Number(Store.get(info.highKey + personId, 0)) > 0 ||
+    Number(Store.get(info.highKey + 'dark_' + personId, 0)) > 0);
+}
+
+function showArcadeAsleep() {
+  const who = currentKid ? currentKid.name : null;
+  showModal({
+    title: '🕹️ The arcade is still asleep…',
+    message: who
+      ? 'Drop tonight\'s happy thought into your jar first, ' + who + ' — then the games wake up! ✨'
+      : 'Open your jar and drop tonight\'s happy thought in first — then the games wake up! ✨',
+    confirmText: 'Okay! 🫙'
+  });
+}
+
 function openArcade() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -3312,7 +3344,12 @@ document.getElementById('sky-title').addEventListener('click', () => {
   skyTapCount++;
   clearTimeout(skyTapTimer);
   skyTapTimer = setTimeout(() => { skyTapCount = 0; }, 2000);
-  if (skyTapCount >= 5) { skyTapCount = 0; openArcade(); }
+  if (skyTapCount >= 5) {
+    skyTapCount = 0;
+    // the jar comes first — the arcade is what tonight's thought earns you
+    if (currentKid && arcadeUnlocked(currentKid.id)) openArcade();
+    else showArcadeAsleep();
+  }
 });
 
 // ---------- keepsake book (print / save as PDF) ----------

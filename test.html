@@ -497,6 +497,90 @@ async function scenarioBlasterJuice() {
   assert(buzzes.length === 1, 'turning it on gives an instant taste buzz');
 }
 
+/* ---- scenario 6: the arcade is earned by filling the jar ---- */
+async function scenarioArcadeEarned() {
+  const azToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Phoenix' }).format(new Date());
+  const tapSky = (doc) => {
+    const title = doc.getElementById('sky-title');
+    for (let i = 0; i < 5; i++) title.click();
+  };
+  const arcadeOpen = (doc) => [...doc.querySelectorAll('.modal-box h3')]
+    .some(h => h.textContent.includes('You found the Secret Arcade'));
+  const asleepShown = (doc) => [...doc.querySelectorAll('.modal-box h3')]
+    .some(h => h.textContent.includes('arcade is still asleep'));
+
+  // an empty jar keeps the games asleep
+  let { doc, win } = await bootApp(['unused'], { phone_owner: 'river' });
+  clickKid(doc, 'River');
+  await waitFor(() => doc.getElementById('screen-journal').classList.contains('active'), 'jar opens');
+  assert(!win.arcadeUnlocked('river'), 'no thought tonight = arcade locked');
+  doc.getElementById('back-btn').click();
+  doc.getElementById('sky-btn').click();
+  await waitFor(() => doc.getElementById('screen-sky').classList.contains('active'), 'sky opens');
+  tapSky(doc);
+  await waitFor(() => asleepShown(doc) || arcadeOpen(doc), 'tapping the secret does something');
+  assert(asleepShown(doc), 'the secret still responds — it explains, it does not just ignore you');
+  assert(!arcadeOpen(doc), 'but the games stay shut');
+  doc.querySelector('.modal-overlay .btn-primary').click();
+
+  // yesterday's thought does not buy tonight's play
+  const yesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Phoenix' })
+    .format(new Date(Date.now() - 86400000));
+  ({ doc, win } = await bootApp(['unused'], { phone_owner: 'river', data: { records: {
+    entry_old: { id: 'entry_old', type: 'entry', kidId: 'river', text: 'yesterday', prompt: '', date: yesterday, updatedAt: 10 }
+  } } }));
+  assert(!win.arcadeUnlocked('river'), "yesterday's thought doesn't unlock tonight — it's earned fresh each night");
+
+  // tonight's thought opens it
+  ({ doc, win } = await bootApp(['unused'], { phone_owner: 'river', data: { records: {
+    entry_now: { id: 'entry_now', type: 'entry', kidId: 'river', text: 'tonight', prompt: '', date: azToday, updatedAt: 20 }
+  } } }));
+  assert(win.arcadeUnlocked('river'), "tonight's thought unlocks the arcade");
+  clickKid(doc, 'River');
+  await waitFor(() => doc.getElementById('screen-journal').classList.contains('active'), 'jar opens');
+  doc.getElementById('back-btn').click();
+  doc.getElementById('sky-btn').click();
+  await waitFor(() => doc.getElementById('screen-sky').classList.contains('active'), 'sky opens again');
+  tapSky(doc);
+  await waitFor(() => arcadeOpen(doc), 'the arcade opens for a filled jar');
+  assert(!asleepShown(doc), 'and says nothing about being asleep');
+  doc.querySelector('.modal-overlay .btn-secondary').click();
+
+  // it's per person: Sedona's thought doesn't unlock River's arcade
+  assert(!win.arcadeUnlocked('sedona'), "another kid's jar doesn't unlock yours");
+
+  // the nudge only reaches kids who already found the secret
+  assert(!win.hasPlayedArcade('river'), 'a kid with no high score has not found it yet');
+  localStorage.setItem('wonderjar_game_high_blaster_river', JSON.stringify(42));
+  assert(win.hasPlayedArcade('river'), 'a high score means they know about it');
+  localStorage.setItem('wonderjar_game_high_blaster_dark_river', JSON.stringify(7));
+  localStorage.removeItem('wonderjar_game_high_blaster_river');
+  assert(win.hasPlayedArcade('river'), 'a Dark Nebula score counts too');
+  localStorage.removeItem('wonderjar_game_high_blaster_dark_river');
+
+  // saving tonight's thought nudges a kid who knows — and stays quiet for one who doesn't
+  const saveAndWatch = async (knows) => {
+    const boot = await bootApp(['unused'], { phone_owner: 'sedona', anthropic_key: null });
+    if (knows) localStorage.setItem('wonderjar_game_high_catch_sedona', JSON.stringify(9));
+    clickKid(boot.doc, 'Sedona');
+    await waitFor(() => boot.doc.getElementById('screen-journal').classList.contains('active'), 'jar for saving');
+    await typeAndSave(boot.doc, 'a brand new happy thought');
+    // a first entry also earns a Glimmer and a badge; the arcade nudge is queued
+    // behind those reveals, so click through the celebration queue to reach it
+    let seen = '';
+    for (let i = 0; i < 14; i++) {
+      await sleep(250);
+      boot.doc.querySelectorAll('.toast').forEach(t => { seen += ' | ' + t.textContent; });
+      const next = boot.doc.querySelector('.modal-overlay .btn-primary');
+      if (next) next.click();
+    }
+    boot.doc.querySelectorAll('.modal-overlay').forEach(o => o.remove());
+    return seen;
+  };
+  assert(/arcade/i.test(await saveAndWatch(true)), 'a kid who knows is told the arcade woke up');
+  assert(!/arcade/i.test(await saveAndWatch(false)), 'a kid who has never found it gets no spoiler');
+}
+
 /* ---- scenario 5: the bug-fix batch — wishes, toasts, undo, full storage ---- */
 async function scenarioReliability() {
   // ---- Wonder Wishes are never spent by a background render ----
@@ -676,6 +760,7 @@ async function scenarioReliability() {
     await scenarioPhoneOwnership();
     await scenarioBlasterJuice();
     await scenarioReliability();
+    await scenarioArcadeEarned();
   } catch (e) {
     report(false, 'test run crashed', e.message);
   } finally {
