@@ -2529,6 +2529,13 @@ const MODE_INFO = {
 
 let gameCanvas = null, gameCtx = null, gameLoopId = null, gameState = null, gameMode = 'flight';
 
+// haptics — a tiny buzz makes every hit feel real. Android only; iPhones quietly skip it.
+function hapticsOn() { return Store.get('haptics', true); }
+function buzz(pattern) {
+  if (!hapticsOn() || !('vibrate' in navigator)) return;
+  try { navigator.vibrate(pattern); } catch (e) { /* some browsers throw without user gesture */ }
+}
+
 function roundRectPath(ctx, x, y, w, h, r) {
   if (h <= 0) return;
   const rr = Math.min(r, w / 2, h / 2);
@@ -2555,7 +2562,7 @@ function setupGameCanvas() {
 function resetGameState(w, h) {
   const base = { running: false, over: false, frame: 0, score: 0, w, h };
   if (gameMode === 'catch') return { ...base, flies: [], pops: [], timeLeft: CATCH_GAME.durationFrames };
-  if (gameMode === 'blaster') return { ...base, shipX: w / 2, lasers: [], rocks: [], bursts: [], lives: BLAST_GAME.lives, hitFlash: 0 };
+  if (gameMode === 'blaster') return { ...base, shipX: w / 2, lasers: [], rocks: [], bursts: [], pops: [], lives: BLAST_GAME.lives, hitFlash: 0 };
   return { ...base, shipY: h / 2, shipVel: 0, obstacles: [], sparkles: [] };
 }
 
@@ -2599,6 +2606,25 @@ function openArcade() {
     list.appendChild(b);
   }
   box.appendChild(list);
+
+  if ('vibrate' in navigator) {
+    const row = document.createElement('div');
+    row.className = 'toggle-row';
+    row.style.marginTop = '12px';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.id = 'haptics-toggle';
+    check.checked = hapticsOn();
+    const lab = document.createElement('label');
+    lab.htmlFor = 'haptics-toggle';
+    lab.textContent = '📳 Buzz when you blast stuff';
+    check.addEventListener('change', () => {
+      Store.set('haptics', check.checked);
+      if (check.checked) buzz(20); // instant taste of it
+    });
+    row.append(check, lab);
+    box.appendChild(row);
+  }
 
   const btnRow = document.createElement('div');
   btnRow.className = 'modal-buttons';
@@ -2676,7 +2702,7 @@ function tickFlight(s) {
   for (const sp of s.sparkles) {
     if (sp.taken) continue;
     const dx = sp.x - GAME.shipX, dy = sp.y - s.shipY;
-    if (Math.sqrt(dx * dx + dy * dy) < 26) { sp.taken = true; s.score += 3; }
+    if (Math.sqrt(dx * dx + dy * dy) < 26) { sp.taken = true; s.score += 3; buzz(10); }
   }
   s.sparkles = s.sparkles.filter(sp => !sp.taken);
 
@@ -2719,6 +2745,7 @@ function catchTap(x, y) {
     const pts = f.gold ? 5 : 1;
     s.score += pts;
     s.pops.push({ x: f.x, y: f.y, age: 0, label: '+' + pts });
+    buzz(f.gold ? 25 : 10);
     document.getElementById('game-score').textContent = s.score;
   }
 }
@@ -2759,6 +2786,13 @@ function tickBlaster(s) {
           r.dead = true;
           s.score += r.pts;
           s.bursts.push({ x: r.x, y: r.y, age: 0, big: r.r > 16 });
+          // big score number explodes right where the rock was
+          s.pops.push({ x: Math.max(26, Math.min(s.w - 26, r.x)), y: r.y, age: 0, label: '+' + r.pts, big: r.pts >= 5 });
+          buzz(r.pts >= 5 ? 35 : 18);
+        } else {
+          // tough rock took the hit — show the contact spark so it doesn't feel like a miss
+          s.bursts.push({ x: l.x, y: l.y, age: 12, big: false });
+          buzz(8);
         }
         break;
       }
@@ -2774,12 +2808,15 @@ function tickBlaster(s) {
       s.bursts.push({ x: r.x, y: r.y, age: 0, big: true });
       s.lives--;
       s.hitFlash = 18;
+      buzz([50, 40, 70]);
       if (s.lives <= 0) { endGame(); return; }
     }
   }
   s.rocks = s.rocks.filter(r => !r.dead && r.y < s.h + 30); // slipping past the bottom is fine — no penalty
   for (const b of s.bursts) b.age++;
   s.bursts = s.bursts.filter(b => b.age < 24);
+  for (const p of s.pops) p.age++;
+  s.pops = s.pops.filter(p => p.age < 32);
   if (s.hitFlash > 0) s.hitFlash--;
 }
 
@@ -2853,6 +2890,20 @@ function renderBlaster(s, ctx) {
     ctx.arc(b.x, b.y, (b.big ? 12 : 8) + t * (b.big ? 34 : 22), 0, Math.PI * 2);
     ctx.stroke();
   }
+  // big score numbers exploding out of blasted rocks — punch in, drift up, fade
+  for (const p of s.pops) {
+    const t = p.age / 32;
+    const scale = t < 0.2 ? (t / 0.2) * 1.3 : 1.3 - (t - 0.2) * 0.4; // overshoot pop-in
+    const size = Math.max(1, (p.big ? 44 : 32) * scale);
+    const fade = 1 - Math.max(0, (t - 0.5) / 0.5); // hold bright, then fade out
+    ctx.font = '700 ' + size + 'px Fredoka, sans-serif';
+    ctx.lineWidth = Math.max(2, size / 9);
+    ctx.strokeStyle = 'rgba(74,44,5,' + fade + ')';
+    ctx.fillStyle = (p.big ? 'rgba(255,214,107,' : 'rgba(255,233,173,') + fade + ')';
+    const py = p.y - t * 30;
+    ctx.strokeText(p.label, p.x, py);
+    ctx.fillText(p.label, p.x, py);
+  }
   // ship (🚀 points up-right by default; rotate so it points up)
   ctx.save();
   ctx.translate(s.shipX, s.h - BLAST_GAME.shipY);
@@ -2903,6 +2954,9 @@ function endGame() {
   if (isNewHigh) Store.set(info.highKey + kidId, s.score);
   const high = Math.max(prevHigh, s.score);
   if (isNewHigh) confettiBurst(40);
+  if (isNewHigh) buzz([30, 40, 30, 40, 90]);
+  else if (gameMode === 'catch') buzz(40);
+  else buzz([60, 50, 90]);
   let title;
   if (isNewHigh) title = 'New high score! 🏆';
   else if (gameMode === 'catch') title = "Time's up! 🌟";
