@@ -2842,6 +2842,7 @@ function renderCatch(s, ctx) {
 
   for (const f of s.flies) {
     if (f.gold) {
+      ctx.fillStyle = '#fff'; // emoji inherit the current fill's alpha — keep them opaque
       ctx.font = '26px sans-serif';
       ctx.fillText('⭐', f.x, f.y);
     } else {
@@ -2878,6 +2879,9 @@ function renderBlaster(s, ctx) {
     ctx.lineTo(l.x, l.y + 12);
     ctx.stroke();
   }
+  // emoji glyphs inherit the CURRENT fill's alpha — always paint them fully opaque,
+  // or a fading score pop from last frame dims every rock and the ship (the flicker bug)
+  ctx.fillStyle = '#fff';
   for (const r of s.rocks) {
     ctx.font = (r.r * 2) + 'px sans-serif';
     ctx.fillText(r.kind, r.x, r.y);
@@ -2891,6 +2895,7 @@ function renderBlaster(s, ctx) {
     ctx.stroke();
   }
   // big score numbers exploding out of blasted rocks — punch in, drift up, fade
+  ctx.save();
   for (const p of s.pops) {
     const t = p.age / 32;
     const scale = t < 0.2 ? (t / 0.2) * 1.3 : 1.3 - (t - 0.2) * 0.4; // overshoot pop-in
@@ -2904,15 +2909,18 @@ function renderBlaster(s, ctx) {
     ctx.strokeText(p.label, p.x, py);
     ctx.fillText(p.label, p.x, py);
   }
+  ctx.restore();
   // ship (🚀 points up-right by default; rotate so it points up)
   ctx.save();
   ctx.translate(s.shipX, s.h - BLAST_GAME.shipY);
   ctx.rotate(-Math.PI / 4);
+  ctx.fillStyle = '#fff';
   ctx.font = '34px sans-serif';
   ctx.fillText('🚀', 0, 0);
   ctx.restore();
   // shields
   ctx.textAlign = 'left';
+  ctx.fillStyle = '#fff';
   ctx.font = '16px sans-serif';
   ctx.fillText('🛡️'.repeat(Math.max(0, s.lives)), 12, 28);
   ctx.textAlign = 'center';
@@ -2932,6 +2940,7 @@ function renderFlight(s, ctx) {
     roundRectPath(ctx, o.x, o.gapY + GAME.obstacleGap, GAME.obstacleWidth, s.h - (o.gapY + GAME.obstacleGap), 10);
     ctx.fill(); ctx.stroke();
   }
+  ctx.fillStyle = '#fff'; // emoji inherit the current fill's alpha — don't dim them with the gate color
   ctx.font = '20px sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const sp of s.sparkles) ctx.fillText('✨', sp.x, sp.y);
