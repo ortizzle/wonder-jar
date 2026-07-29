@@ -572,6 +572,40 @@ async function scenarioReliability() {
   assertEqual(back, gone + 1, 'undo restores the deleted thought');
   assert(liveEntry() !== undefined, 'the restored record is readable again');
 
+  // ---- a duplicated night (two offline devices) doesn't inflate rewards ----
+  const dupDate = az(1);
+  const dupRecords = {
+    entry_dupA: { id: 'entry_dupA', type: 'entry', kidId: 'sedona', text: 'phone A', prompt: '', date: dupDate, updatedAt: 2001 },
+    entry_dupB: { id: 'entry_dupB', type: 'entry', kidId: 'sedona', text: 'phone B', prompt: '', date: dupDate, updatedAt: 2002 }
+  };
+  const dup = await bootApp(['unused'], { data: { records: dupRecords } });
+  const dupStats = dup.win.statsFor('sedona');
+  assertEqual(dup.win.entriesFor('sedona').length, 2, 'both devices\' records survive the merge (nothing is lost)');
+  assertEqual(dupStats.totalEntries, 1, 'but the same night counts once toward rewards');
+  assertEqual(dupStats.currentStreak, 1, 'and once toward the streak');
+
+  // ---- a store missing `records` doesn't brick the app ----
+  assertEqual(dup.win.normalizeData({}).records, {}, 'a shapeless store normalizes to an empty jar');
+  assertEqual(dup.win.normalizeData(null).records, {}, 'so does a null one');
+  assert(dup.win.normalizeData({ records: dupRecords }).records === dupRecords, 'a good store passes through untouched');
+
+  // ---- the AI request is shaped for the current model ----
+  let sentBody = null;
+  dup.win.fetch = (url, opts) => {
+    if (String(url).includes('api.anthropic.com')) {
+      sentBody = JSON.parse(opts.body);
+      return Promise.resolve(new dup.win.Response(JSON.stringify({ content: [{ type: 'text', text: 'ok' }] }), { status: 200 }));
+    }
+    return Promise.reject(new Error('blocked'));
+  };
+  await dup.win.askClaude('hello', { maxTokens: 60 });
+  assertEqual(sentBody.model, 'claude-sonnet-5', 'calls the current Sonnet');
+  assertEqual(sentBody.thinking && sentBody.thinking.type, 'disabled',
+    'thinking is off — otherwise it shares max_tokens and truncates the answer');
+  assertEqual(sentBody.max_tokens, 60, 'the caller keeps its token budget');
+  assert(!('temperature' in sentBody) && !('top_p' in sentBody) && !('budget_tokens' in sentBody),
+    'no parameters the current models reject');
+
   // ---- every thought stays reachable: search + paging ----
   doc.querySelectorAll('.modal-overlay').forEach(o => o.remove());
   const many = { records: {} };
