@@ -310,6 +310,31 @@ async function scenarioBlasterJuice() {
   win.tickBlaster(s);
   assert(s.pops.length === 1 && s.pops[0].label === '+2', 'the second hit explodes the score number');
 
+  // the ship/rocks/shields must stay fully bright while a score number fades
+  // (emoji inherit the fill's alpha — a fading pop once dimmed everything after it)
+  const offscreen = doc.createElement('canvas');
+  offscreen.width = 300; offscreen.height = 500;
+  const real = offscreen.getContext('2d');
+  const draws = [];
+  const spyCtx = new Proxy(real, {
+    get(t, k) {
+      const v = t[k];
+      if (k === 'fillText') return (txt, x, y) => { draws.push({ txt: String(txt), fill: String(t.fillStyle) }); return v.call(t, txt, x, y); };
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+    set(t, k, val) { t[k] = val; return true; }
+  });
+  s = state([{ kind: '🪨', r: 19, hp: 2, pts: 2, speed: 0, zig: false, x: 80, y: 120, phase: 0 }], []);
+  s.pops.push({ x: 150, y: 200, age: 28, label: '+5', big: true }); // mid-fade, alpha ≈ .25
+  win.renderBlaster(s, spyCtx);
+  win.renderBlaster(s, spyCtx); // second frame: leaked state would dim the rocks drawn early
+  const alphaOf = (fill) => { const m = fill.match(/rgba\([^)]*,\s*([\d.]+)\)/); return m ? Number(m[1]) : 1; };
+  const emojiDraws = draws.filter(d => /🚀|🪨|☄️|🛸|🛡️/.test(d.txt));
+  assert(emojiDraws.length >= 4, 'spy saw the ship, rock, and shield draws');
+  assert(emojiDraws.every(d => alphaOf(d.fill) === 1), 'ship, rocks, and shields stay fully bright while numbers fade');
+  const popDraws = draws.filter(d => d.txt === '+5');
+  assert(popDraws.length && popDraws.every(d => alphaOf(d.fill) < 1), 'the fading number itself is still translucent');
+
   // the haptics toggle: off means silent, and the choice persists on this phone
   buzzes.length = 0;
   localStorage.setItem('wonderjar_haptics', JSON.stringify(false));
