@@ -382,6 +382,9 @@
     background: rgba(184,169,245,.15); color: var(--lavender); font-weight: 800; font-size: 13px;
   }
   .settings-note { font-size: 12px; color: var(--text-dim); margin-top: 6px; line-height: 1.4; }
+  .ortiz-drive h4 { margin-top: 16px; }
+  .ortiz-drive .btn-small { min-height: 48px; width: 100%; }
+  .drive-bar { min-height: 48px; margin-top: 18px; }
 
   /* ---------- tabs + treasures modal ---------- */
   .tab-row { display: flex; gap: 6px; margin-top: 14px; }
@@ -548,6 +551,7 @@
   <div class="kid-cards" id="kid-cards"></div>
   <div class="grownups-row" id="grownup-cards"></div>
   <p class="profiles-hint">Who's filling their jar tonight?</p>
+  <div id="drive-bar-slot"></div>
   <div class="profile-actions">
     <button class="pill-btn" id="sky-btn">🌌 Our Family Sky</button>
     <button class="pill-btn" id="settings-btn">⚙️ Grown-up stuff</button>
@@ -673,6 +677,7 @@
 <!-- printable keepsake book (hidden except when printing) -->
 <div id="print-book"></div>
 
+<script src="ortiz-drive.js"></script>
 <script>
 /* ============================================================
    Wonder Jar — v1
@@ -804,7 +809,7 @@ function syncAfterChange() {
   setSyncDot('pending');
   clearTimeout(syncTimer);
   syncTimer = setTimeout(async () => {
-    try { data = await Sync.save(data); saveLocal(); setSyncDot('ok'); }
+    try { data = await Sync.save(data); saveLocal(); setSyncDot('ok'); OrtizDrive.check(); }
     catch (e) { setSyncDot('err'); toast('Sync hiccup — saved on this phone 💾'); }
   }, 1500);
 }
@@ -816,6 +821,7 @@ async function pullAndRender() {
     saveLocal();
     setSyncDot('ok');
     refreshCurrentView();
+    OrtizDrive.check();
   } catch (e) { setSyncDot('err'); }
 }
 function refreshCurrentView() {
@@ -1257,6 +1263,7 @@ function renderProfiles() {
   const grownHolder = document.getElementById('grownup-cards');
   grownHolder.textContent = '';
   for (const p of PEOPLE.filter(p => !p.kid)) grownHolder.appendChild(makePersonCard(p));
+  mountDriveBar();
 }
 
 // ---------- journal ----------
@@ -3426,6 +3433,25 @@ function importBackup(file) {
   reader.readAsText(file);
 }
 
+// ---------- Google Drive copy ----------
+// Same shape as downloadBackup so a Drive file restores through importBackup,
+// minus the PIN records: codes are plain digits and a Drive file can travel.
+// Restore merges, so leaving pins out never clears the codes already set.
+function driveBackupData() {
+  const records = {};
+  for (const [id, r] of Object.entries(data.records)) {
+    if (r && r.type !== 'pin' && !id.startsWith('pin_')) records[id] = r;
+  }
+  return { records };
+}
+// Grown-ups' phones and the shared family phone only — never a kid's own phone.
+function driveAllowed() {
+  return ownerIsParent() || phoneOwner() === 'family';
+}
+function mountDriveBar() {
+  OrtizDrive.mountBar(document.getElementById('drive-bar-slot'), { className: 'pill-btn drive-bar' });
+}
+
 // ---------- reminders (PWA periodic background sync) ----------
 async function enableReminders() {
   if (!('serviceWorker' in navigator) || !('Notification' in window)) {
@@ -3721,6 +3747,7 @@ function openSettings() {
   keepRow.append(printBtn, dlBtn, restoreBtn);
   keep.append(whoSel, keepRow, fileIn);
   makeNote(keep, 'Keepsake opens the print screen — choose "Save as PDF" to keep it forever.');
+  keep.appendChild(OrtizDrive.settingsBlock({ labelTag: 'h4', buttonClass: 'btn-small', hintClass: 'settings-note' }));
 
   const btnRow = document.createElement('div');
   btnRow.className = 'modal-buttons';
@@ -3771,6 +3798,14 @@ document.getElementById('admin-sort').addEventListener('change', renderAdminList
 document.getElementById('admin-search').addEventListener('input', renderAdminList);
 
 // ---------- init ----------
+OrtizDrive.init({
+  app: 'Wonder Jar',
+  prefix: 'wonder-jar',
+  getData: driveBackupData,
+  toast: (msg) => toast(msg),
+  onChange: mountDriveBar,
+  allowed: driveAllowed
+});
 renderProfiles();
 if (!phoneOwner()) showOwnerPicker();
 if ('serviceWorker' in navigator) {
