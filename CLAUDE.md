@@ -8,7 +8,9 @@ Wonder Jar is a family gratitude-journal PWA for the Ortiz family: kids speak or
 
 - `index.html` — the entire app: all CSS in one `<style>` block (~lines 15–488), all JS in one `<script>` block (~lines 605–2621), organized by `// ---------- section ----------` comment headers.
 - `sw.js` — service worker: network-first caching plus nightly reminder notifications via periodic background sync.
-- `manifest.webmanifest`, `icon.svg` — PWA install metadata.
+- `manifest.webmanifest`, `icon.svg`, `apple-touch-icon.png`, `icon-192/512.png` — PWA install metadata.
+- `og-image.png` — 1200×630 link-preview card (Open Graph tags in `<head>`) so shared links look fun in texts.
+- `sedona/`, `river/` — each girl's texted link: a tiny page with her own preview card (`og-<id>.png`) that redirects to `../?kid=<id>`. `openFromLink()` opens her jar (claiming an un-owned phone for her); Settings › "Send a jar link" shares them.
 
 ## Development
 
@@ -22,7 +24,7 @@ Serve over http(s) — service worker and PWA features don't work from `file://`
 
 `test.html` is a zero-dependency browser test harness: it loads the real app in an iframe with the Anthropic API stubbed, drives the UI, and asserts on stored records (currently covering the follow-up Q&A flow). Open `http://localhost:8000/test.html` and check for "PASS" — it snapshots and restores real `wonderjar_*` localStorage around the run. It can also be driven headless (`document.title` becomes `PASS`/`FAIL`, `window.__testDone`/`window.__failures` are set). Extend it when changing entry-saving behavior.
 
-When shipping changes to cached assets, bump the `CACHE` version constant in `sw.js` (`wonderjar-v2` → `wonderjar-v3`) so installed clients pick up the new files.
+When shipping changes to cached assets, bump the `CACHE` version constant in `sw.js` (e.g. `wonderjar-v11` → `wonderjar-v12`) so installed clients pick up the new files.
 
 ## Architecture
 

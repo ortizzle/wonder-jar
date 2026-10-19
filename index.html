@@ -9,6 +9,18 @@
 <meta name="theme-color" content="#0b0c2a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="description" content="Whisper tonight's happy thought & watch it glow ✨ The Ortiz family gratitude jar.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Wonder Jar">
+<meta property="og:title" content="Wonder Jar ✨">
+<meta property="og:description" content="Whisper tonight's happy thought & watch it glow 🌙">
+<meta property="og:url" content="https://ortizzle.github.io/wonder-jar/">
+<meta property="og:image" content="https://ortizzle.github.io/wonder-jar/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A glowing jar full of fireflies under a starry night sky">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -835,8 +847,8 @@ function refreshCurrentView() {
 
 // ---------- static data ----------
 const PEOPLE = [
-  { id: 'sedona', name: 'Sedona', avatar: '🦋', tint: 'rgba(245,169,208,.25)', kid: true },
-  { id: 'river',  name: 'River',  avatar: '🦊', tint: 'rgba(123,224,214,.22)', kid: true },
+  { id: 'sedona', name: 'Sedona', avatar: '🦋', tint: 'rgba(123,224,214,.22)', kid: true },
+  { id: 'river',  name: 'River',  avatar: '🦊', tint: 'rgba(197,139,255,.25)', kid: true },
   { id: 'mom',    name: 'Mom',    avatar: '🌙', tint: 'rgba(184,169,245,.25)', kid: false },
   { id: 'dad',    name: 'Dad',    avatar: '⭐', tint: 'rgba(255,214,107,.22)', kid: false }
 ];
@@ -1004,6 +1016,7 @@ const AVATAR_CHOICES = [
 const TINT_CHOICES = [
   { tint: 'rgba(245,169,208,.25)', solid: '#f5a9d0' },
   { tint: 'rgba(123,224,214,.22)', solid: '#7be0d6' },
+  { tint: 'rgba(197,139,255,.25)', solid: '#c58bff' },
   { tint: 'rgba(184,169,245,.25)', solid: '#b8a9f5' },
   { tint: 'rgba(255,214,107,.22)', solid: '#ffd66b' },
   { tint: 'rgba(123,224,160,.22)', solid: '#7be0a0' },
@@ -3573,6 +3586,29 @@ function makeNote(parent, text) {
   parent.appendChild(n);
 }
 
+// each girl's link (sedona/, river/) carries her own preview card, then lands on ?kid=<id>
+function kidLink(kid) { return new URL(kid.id + '/', location.href.split(/[?#]/)[0].replace(/[^/]*$/, '')).href; }
+
+async function shareKidLink(kid) {
+  const url = kidLink(kid);
+  if (navigator.share) {
+    try { await navigator.share({ title: kid.name + '\'s Wonder Jar ✨', url }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast('Link copied — paste it in a text to ' + kid.name + '! 💌'); return; }
+  catch (e) { /* show it instead */ }
+  showModal({ title: kid.avatar + ' ' + kid.name + '\'s link', message: url });
+}
+
+function openFromLink() {
+  const kid = KIDS.find(k => k.id === new URLSearchParams(location.search).get('kid'));
+  if (!kid) return;
+  history.replaceState(null, '', location.pathname); // a refresh shouldn't re-open it
+  // a phone that hasn't picked its person yet is almost surely the girl the link was sent to
+  if (!phoneOwner()) { Store.set('phone_owner', kid.id); toast('This is ' + kid.name + '\'s phone now! ✨'); }
+  requirePin(kid, () => enterJournal(kid));
+}
+
 document.getElementById('settings-btn').addEventListener('click', () => requireParentPin(openSettings));
 
 function openSettings() {
@@ -3584,6 +3620,20 @@ function openSettings() {
   const h = document.createElement('h3');
   h.textContent = '⚙️ Grown-up stuff';
   box.appendChild(h);
+
+  // jar links to text the girls
+  const links = makeSection(box, '💌 Send a jar link');
+  const linkRow = document.createElement('div');
+  linkRow.className = 'btn-row';
+  for (const kid of KIDS) {
+    const b = document.createElement('button');
+    b.className = 'btn-small';
+    b.textContent = kid.avatar + ' ' + kid.name + '\'s link';
+    b.addEventListener('click', () => shareKidLink(kid));
+    linkRow.appendChild(b);
+  }
+  links.appendChild(linkRow);
+  makeNote(links, 'Each link shows up in texts as a glowing card with her name, and opens right into her jar. The first time it opens on her phone, that phone becomes hers.');
 
   // family sync
   const sync = makeSection(box, 'Family sync (GitHub Gist)');
@@ -3807,6 +3857,7 @@ OrtizDrive.init({
   allowed: driveAllowed
 });
 renderProfiles();
+openFromLink();
 if (!phoneOwner()) showOwnerPicker();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
