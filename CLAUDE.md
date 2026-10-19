@@ -8,8 +8,9 @@ Wonder Jar is a family gratitude-journal PWA for the Ortiz family: kids speak or
 
 - `index.html` — the entire app: all CSS in one `<style>` block (~lines 15–488), all JS in one `<script>` block (~lines 605–2621), organized by `// ---------- section ----------` comment headers.
 - `sw.js` — service worker: network-first caching plus nightly reminder notifications via periodic background sync.
-- `manifest.webmanifest`, `icon.svg`, `apple-touch-icon.png` — PWA install metadata.
+- `manifest.webmanifest`, `icon.svg`, `apple-touch-icon.png`, `icon-192/512.png` — PWA install metadata.
 - `og-image.png` — 1200×630 link-preview card (Open Graph tags in `<head>`) so shared links look fun in texts.
+- `sedona/`, `river/` — each girl's texted link: a tiny page with her own preview card (`og-<id>.png`) that redirects to `../?kid=<id>`. `openFromLink()` opens her jar (claiming an un-owned phone for her); Settings › "Send a jar link" shares them.
 
 ## Development
 

@@ -1,5 +1,5 @@
 /* Wonder Jar service worker — network-first (stale caches have burned this family before) */
-const CACHE = 'wonderjar-v12';
+const CACHE = 'wonderjar-v13';
 const CORE = ['./', './index.html', './ortiz-drive.js', './manifest.webmanifest', './icon.svg', './apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

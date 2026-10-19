@@ -3585,6 +3585,29 @@ function makeNote(parent, text) {
   parent.appendChild(n);
 }
 
+// each girl's link (sedona/, river/) carries her own preview card, then lands on ?kid=<id>
+function kidLink(kid) { return new URL(kid.id + '/', location.href.split(/[?#]/)[0].replace(/[^/]*$/, '')).href; }
+
+async function shareKidLink(kid) {
+  const url = kidLink(kid);
+  if (navigator.share) {
+    try { await navigator.share({ title: kid.name + '\'s Wonder Jar ✨', url }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast('Link copied — paste it in a text to ' + kid.name + '! 💌'); return; }
+  catch (e) { /* show it instead */ }
+  showModal({ title: kid.avatar + ' ' + kid.name + '\'s link', message: url });
+}
+
+function openFromLink() {
+  const kid = KIDS.find(k => k.id === new URLSearchParams(location.search).get('kid'));
+  if (!kid) return;
+  history.replaceState(null, '', location.pathname); // a refresh shouldn't re-open it
+  // a phone that hasn't picked its person yet is almost surely the girl the link was sent to
+  if (!phoneOwner()) { Store.set('phone_owner', kid.id); toast('This is ' + kid.name + '\'s phone now! ✨'); }
+  requirePin(kid, () => enterJournal(kid));
+}
+
 document.getElementById('settings-btn').addEventListener('click', () => requireParentPin(openSettings));
 
 function openSettings() {
@@ -3596,6 +3619,20 @@ function openSettings() {
   const h = document.createElement('h3');
   h.textContent = '⚙️ Grown-up stuff';
   box.appendChild(h);
+
+  // jar links to text the girls
+  const links = makeSection(box, '💌 Send a jar link');
+  const linkRow = document.createElement('div');
+  linkRow.className = 'btn-row';
+  for (const kid of KIDS) {
+    const b = document.createElement('button');
+    b.className = 'btn-small';
+    b.textContent = kid.avatar + ' ' + kid.name + '\'s link';
+    b.addEventListener('click', () => shareKidLink(kid));
+    linkRow.appendChild(b);
+  }
+  links.appendChild(linkRow);
+  makeNote(links, 'Each link shows up in texts as a glowing card with her name, and opens right into her jar. The first time it opens on her phone, that phone becomes hers.');
 
   // family sync
   const sync = makeSection(box, 'Family sync (GitHub Gist)');
@@ -3819,6 +3856,7 @@ OrtizDrive.init({
   allowed: driveAllowed
 });
 renderProfiles();
+openFromLink();
 if (!phoneOwner()) showOwnerPicker();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
