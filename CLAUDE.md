@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Wonder Jar is a family gratitude-journal PWA for the Ortiz family: kids speak or type a nightly "happy thought" into a glowing jar and earn rewards (Glimmers, badges, sparks, family milestones). It is a **zero-dependency, no-build static site** — four files total:
+Wonder Jar is a family gratitude-journal PWA for the Ortiz family: kids type a nightly "happy thought" (or dictate it with their keyboard's 🎤) into a glowing jar and earn rewards (Glimmers, badges, sparks, family milestones). It is a **zero-dependency, no-build static site** — four files total:
 
 - `index.html` — the entire app: all CSS in one `<style>` block (~lines 15–488), all JS in one `<script>` block (~lines 605–2621), organized by `// ---------- section ----------` comment headers.
 - `sw.js` — service worker: network-first caching plus nightly reminder notifications via periodic background sync.
