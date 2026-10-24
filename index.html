@@ -201,47 +201,16 @@
   .prompt-list-btn:active { background: rgba(184,169,245,.3); }
   .qa-question { font-size: 12px; color: var(--lavender); font-weight: 800; margin-bottom: 4px; }
 
-  /* ---------- mic / capture ---------- */
+  /* ---------- capture ---------- */
   #capture-zone {
     display: flex; flex-direction: column; align-items: center;
     margin-top: 8px; padding-top: 18px; padding-bottom: 14px; gap: 10px;
     flex-shrink: 0;
   }
-  #mic-btn {
-    width: 92px; height: 92px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #ffe9ad, #ffc93c 60%, #e8a30c);
-    box-shadow: 0 0 0 0 rgba(255, 214, 107, .5), 0 8px 24px rgba(0,0,0,.4);
-    font-size: 40px;
-    display: flex; align-items: center; justify-content: center;
-    transition: transform .15s ease;
-    animation: breathe 2.6s ease-in-out infinite;
-  }
-  @keyframes breathe {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,214,107,.45), 0 8px 24px rgba(0,0,0,.4); }
-    50% { box-shadow: 0 0 0 16px rgba(255,214,107,0), 0 8px 24px rgba(0,0,0,.4); }
-  }
-  #mic-btn:active { transform: scale(.92); }
-  #mic-btn.listening {
-    animation: none;
-    background: radial-gradient(circle at 35% 30%, #ffb3d1, #f56fa1 60%, #d1447e);
-  }
-  .ring {
-    position: absolute; border-radius: 50%;
-    border: 3px solid rgba(245, 111, 161, .6);
-    animation: ringout 1.4s ease-out infinite;
-    pointer-events: none;
-  }
-  @keyframes ringout {
-    from { width: 92px; height: 92px; opacity: 1; }
-    to { width: 190px; height: 190px; opacity: 0; }
-  }
-  #mic-wrap { position: relative; display: flex; align-items: center; justify-content: center; }
-  #mic-hint { font-size: 15px; color: var(--text-dim); font-weight: 700; min-height: 22px; text-align: center; }
-  #type-link { color: var(--lavender); font-size: 14px; font-weight: 800; min-height: 44px; display: flex; align-items: center; }
+  #capture-hint { font-size: 14px; color: var(--text-dim); font-weight: 700; min-height: 22px; text-align: center; }
 
   /* ---------- transcript bubble ---------- */
-  #transcript-zone { display: none; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; margin: 0 auto; }
-  #transcript-zone.show { display: flex; }
+  #transcript-zone { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; margin: 0 auto; }
   #transcript-box {
     width: 100%; min-height: 84px;
     background: #fffbe9; color: #3c2f0a;
@@ -620,20 +589,14 @@
   </div>
 
   <div id="capture-zone">
-    <div id="mic-wrap">
-      <button id="mic-btn" aria-label="Talk">🎤</button>
-    </div>
-    <div id="mic-hint">Tap the mic and tell me!</div>
-    <button id="type-link">…or type it instead ✏️</button>
-
     <div id="transcript-zone">
-      <textarea id="transcript-box" rows="3" placeholder="Your happy thought…"></textarea>
+      <textarea id="transcript-box" rows="4" placeholder="Type your happy thought here…"></textarea>
       <div id="glow-meter"><span class="gm-fly"></span><span id="glow-label">a little spark…</span></div>
       <div class="capture-actions">
-        <button class="btn-big btn-redo" id="redo-btn">🎤 Redo</button>
         <button class="btn-big btn-save" id="save-btn">Drop it in the jar! 🫙</button>
       </div>
     </div>
+    <div id="capture-hint"></div>
   </div>
 </section>
 
@@ -1089,8 +1052,6 @@ const MILESTONES = [
 let data = normalizeData(Store.get('data', { records: {} }));
 let currentKid = null;
 let currentPrompt = '';
-let recognizing = false;
-let recognition = null;
 
 // ---------- helpers over records ----------
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -1431,14 +1392,12 @@ document.getElementById('jar-wrap').addEventListener('click', () => {
 });
 document.getElementById('memory-bubble').addEventListener('click', (e) => { e.stopPropagation(); closeMemoryBubble(); });
 
-// ---------- voice capture ----------
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const micBtn = document.getElementById('mic-btn');
-const micHint = document.getElementById('mic-hint');
-const transcriptZone = document.getElementById('transcript-zone');
+// ---------- capture (a text box — kids can use their keyboard's 🎤 to talk it out) ----------
+const captureHint = document.getElementById('capture-hint');
 const transcriptBox = document.getElementById('transcript-box');
 const glowMeter = document.getElementById('glow-meter');
 const glowLabel = document.getElementById('glow-label');
+const CAPTURE_HINT = 'Tip: tap the 🎤 on your keyboard to say it out loud!';
 
 function updateGlowMeter() {
   const len = transcriptBox.value.trim().length;
@@ -1452,97 +1411,16 @@ function updateGlowMeter() {
 }
 transcriptBox.addEventListener('input', updateGlowMeter);
 
-function showTranscript() {
-  transcriptZone.classList.add('show');
-  document.getElementById('mic-wrap').style.display = 'none';
-  document.getElementById('type-link').style.display = 'none';
-}
-function hideTranscript() {
-  transcriptZone.classList.remove('show');
-  document.getElementById('mic-wrap').style.display = 'flex';
-  document.getElementById('type-link').style.display = 'flex';
-}
-
 function resetCapture() {
-  stopListening();
-  hideTranscript();
   transcriptBox.value = '';
-  micHint.textContent = SR ? 'Tap the mic and tell me!' : 'Tap to type your happy thought!';
+  updateGlowMeter();
+  captureHint.textContent = CAPTURE_HINT;
 }
 
-function startListening() {
-  if (!SR) { showTyping(); return; }
-  try {
-    recognition = new SR();
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = false;
-
-    recognition.addEventListener('result', (e) => {
-      let text = '';
-      for (const res of e.results) text += res[0].transcript;
-      transcriptBox.value = text;
-      transcriptZone.classList.add('show');
-      updateGlowMeter();
-    });
-    recognition.addEventListener('end', () => {
-      recognizing = false;
-      micBtn.classList.remove('listening');
-      document.querySelectorAll('.ring').forEach(r => r.remove());
-      if (transcriptBox.value.trim()) {
-        micHint.textContent = 'Did I hear that right? You can fix it!';
-        showTranscript();
-      } else {
-        micHint.textContent = "Hmm, I didn't catch it — try again!";
-      }
-    });
-    recognition.addEventListener('error', () => {
-      recognizing = false;
-      micBtn.classList.remove('listening');
-      document.querySelectorAll('.ring').forEach(r => r.remove());
-      micHint.textContent = 'Mic trouble — you can type it instead!';
-      showTyping();
-    });
-
-    recognition.start();
-    recognizing = true;
-    micBtn.classList.add('listening');
-    micHint.textContent = "I'm listening… 👂";
-    for (let i = 0; i < 2; i++) {
-      const ring = document.createElement('div');
-      ring.className = 'ring';
-      ring.style.animationDelay = (i * 0.5) + 's';
-      document.getElementById('mic-wrap').appendChild(ring);
-    }
-  } catch (e) {
-    showTyping();
-  }
-}
-
-function stopListening() {
-  if (recognition && recognizing) { try { recognition.stop(); } catch (e) {} }
-  recognizing = false;
-  micBtn.classList.remove('listening');
-  document.querySelectorAll('.ring').forEach(r => r.remove());
-}
-
-function showTyping() {
-  stopListening();
-  showTranscript();
+function focusCapture() {
   updateGlowMeter();
   transcriptBox.focus();
 }
-
-micBtn.addEventListener('click', () => {
-  if (recognizing) stopListening();
-  else startListening();
-});
-document.getElementById('type-link').addEventListener('click', showTyping);
-document.getElementById('redo-btn').addEventListener('click', () => {
-  transcriptBox.value = '';
-  hideTranscript();
-  startListening();
-});
 
 // ---------- save entry ----------
 // celebration queue: reveals (glimmer, badge, reaction) show one at a time
@@ -1555,8 +1433,8 @@ let editingEntry = null;    // entry id being edited from the Thoughts list
 
 document.getElementById('save-btn').addEventListener('click', () => {
   const text = transcriptBox.value.trim();
-  if (!text) { toast('Say or type something first! 💛'); return; }
-  stopListening();
+  if (!text) { toast('Type something first! 💛'); transcriptBox.focus(); return; }
+  transcriptBox.blur(); // tuck the keyboard away so the firefly flight shows
 
   if (editingEntry && data.records[editingEntry]) {
     const rec = data.records[editingEntry];
@@ -1564,9 +1442,7 @@ document.getElementById('save-btn').addEventListener('click', () => {
     rec.updatedAt = Date.now();
     editingEntry = null;
     syncAfterChange();
-    hideTranscript();
-    transcriptBox.value = '';
-    micHint.textContent = SR ? 'Tap the mic and tell me!' : 'Tap to type your happy thought!';
+    resetCapture();
     toast('Updated! ✨');
     renderJarFireflies();
     return;
@@ -1625,15 +1501,14 @@ document.getElementById('save-btn').addEventListener('click', () => {
     }
   });
 
-  hideTranscript();
-  transcriptBox.value = '';
+  resetCapture();
   removeFollowUp();
-  micHint.textContent = 'Beautiful! ✨';
-  setTimeout(() => { micHint.textContent = SR ? 'Tap the mic to add another!' : 'Tap to type another!'; }, 2500);
+  captureHint.textContent = 'Beautiful! ✨';
+  setTimeout(() => { captureHint.textContent = CAPTURE_HINT; }, 2500);
 });
 
 function flyFireflyToJar(done) {
-  const from = micBtn.getBoundingClientRect();
+  const from = transcriptBox.getBoundingClientRect();
   const to = document.getElementById('jar-wrap').getBoundingClientRect();
   const f = document.createElement('div');
   f.className = 'fly-firefly';
@@ -1834,10 +1709,9 @@ function makeEntryRow(entry, { own, onChanged }) {
     edit.addEventListener('click', () => {
       document.querySelectorAll('.modal-overlay').forEach(o => o.remove());
       editingEntry = entry.id;
-      showTranscript();
       transcriptBox.value = entry.text;
-      transcriptBox.focus();
-      micHint.textContent = 'Fix your thought, then drop it back in!';
+      focusCapture();
+      captureHint.textContent = 'Fix your thought, then drop it back in!';
     });
     const del = document.createElement('button');
     del.textContent = '🗑️';
@@ -1988,7 +1862,7 @@ function renderThoughtsTab(content) {
 
   attachEntryList(content, () => entriesFor(currentKid.id), {
     own: true,
-    emptyText: 'No thoughts yet — tap the mic and add your first!',
+    emptyText: 'No thoughts yet — type your very first one!',
     searchPlaceholder: '🔎 Find a thought…'
   });
 }
@@ -2298,11 +2172,11 @@ function showFollowUpCard(guide, question, entryId) {
   done.addEventListener('click', removeFollowUp);
   const more = document.createElement('button');
   more.className = 'btn-big btn-save';
-  more.textContent = SR ? '🎤 Tell more!' : '✏️ Tell more!';
+  more.textContent = '✏️ Tell more!';
   more.addEventListener('click', () => {
     pendingFollowUp = { entryId, question };
     removeFollowUp();
-    if (SR) startListening(); else showTyping();
+    focusCapture();
   });
   row.append(done, more);
   card.append(who, q, row);
@@ -3826,7 +3700,7 @@ function updateSWMeta() {
 
 // ---------- nav ----------
 document.getElementById('back-btn').addEventListener('click', () => {
-  stopListening();
+  transcriptBox.blur();
   removeFollowUp();
   renderProfiles();
   show('screen-profiles');
